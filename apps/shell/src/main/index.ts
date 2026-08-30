@@ -61,18 +61,6 @@ import {
 } from './analytics'
 import type { Analytics, AnalyticsKeys } from './analytics'
 import {
-  LAST_RUN_VERSION_KEY,
-  STAR_PROMPT_KEY,
-  asStarPromptState,
-  isUpgradeLaunch,
-  shouldShowStarPrompt,
-  shouldShowUpgradeStarPrompt,
-  withDocOpen,
-  withFirstRun,
-  withResolved,
-  withShown,
-} from './star-prompt'
-import {
   clearCloudProjectsStore,
   cloudProjectExternalUrl,
   readCloudProjectsStore,
@@ -181,7 +169,6 @@ import type {
   RecentEntry,
   RecentPage,
   RenameResult,
-  StarPromptShow,
   UiTheme,
 } from '../shared/home-api'
 import { HOME_CHANNELS } from '../shared/home-api'
@@ -400,33 +387,6 @@ const GENTEAM_URL = 'https://genoffice.ai/join'
 // Genspark credit-usage page opened from the account menu's credits row.
 // Kept main-side so the renderer never supplies the URL.
 const CREDIT_USAGE_URL = 'https://www.genspark.ai/credit-usage'
-
-// ---- "star us on GitHub" prompt (see star-prompt.ts for the rules) ----
-
-const readStarPrompt = () =>
-  asStarPromptState(readAppSettings(APP_SETTINGS_PATH())[STAR_PROMPT_KEY])
-const writeStarPrompt = (state: ReturnType<typeof readStarPrompt>) =>
-  writeAppSetting(APP_SETTINGS_PATH(), STAR_PROMPT_KEY, state)
-
-/** set at startup when this is the first launch after an upgrade; consumed by
- * the first starPromptShouldShow query of the session */
-let upgradeStarPromptPending = false
-
-/** a granted show, cached for the session: repeated queries (React StrictMode
- * double-effects, AppFrame remounts) must return the same answer instead of
- * burning another lifetime show or flipping to a snoozed "false" */
-let starPromptSessionGrant: StarPromptShow | null = null
-
-/** every successful document open counts toward the prompt's value threshold */
-function recordStarPromptDocOpen(): void {
-  try {
-    const state = readStarPrompt()
-    const next = withDocOpen(state)
-    if (next !== state) writeStarPrompt(next)
-  } catch {
-    // settings write failures must never break opening a document
-  }
-}
 
 // Stargazer count for the settings About pane; fetched main-side (the
 // renderer CSP has no api.github.com) and cached per session — the exact
@@ -777,7 +737,6 @@ function registerDroppedFilesIpc(): void {
 function openDocumentPath(filePath: string): boolean {
   const opened = routeDocumentPath(filePath)
   if (opened) {
-    recordStarPromptDocOpen()
     // extension only — never the file name or path
     analytics.track('file_open', { ext: extname(filePath).slice(1).toLowerCase() })
   }
@@ -866,7 +825,7 @@ async function newSheetTab(): Promise<void> {
     markSheetsUntitledPath(filePath)
     // route directly (not via openDocumentPath) so creating a sheet emits
     // only file_new — the file_open event is reserved for opening existing files
-    if (routeDocumentPath(filePath)) recordStarPromptDocOpen()
+    routeDocumentPath(filePath)
     analytics.track('file_new', { kind: 'xlsx' })
   } catch (err) {
     console.warn('[shell] blank workbook create failed, opening in-memory blank tab:', err)
@@ -892,8 +851,6 @@ function surfaceNewTabError(err: unknown): void {
 function newDocTab(): void {
   try {
     tabManager?.openDocsTab(undefined, { newBlank: true })
-    // creating a document is as much a value moment as opening one
-    recordStarPromptDocOpen()
     analytics.track('file_new', { kind: 'docx' })
   } catch (err) {
     surfaceNewTabError(err)
@@ -903,7 +860,6 @@ function newDocTab(): void {
 function newSlideTab(): void {
   try {
     tabManager?.openSlidesTab()
-    recordStarPromptDocOpen()
     analytics.track('file_new', { kind: 'pptx' })
   } catch (err) {
     surfaceNewTabError(err)
@@ -913,7 +869,6 @@ function newSlideTab(): void {
 function newMarkdownTab(): void {
   try {
     tabManager?.openMarkdownTab()
-    recordStarPromptDocOpen()
     analytics.track('file_new', { kind: 'md' })
   } catch (err) {
     surfaceNewTabError(err)
@@ -933,9 +888,8 @@ async function newPdfTab(): Promise<void> {
     markPdfUntitledPath(filePath)
     // PDF has no opened/saved shell hook — assign the pending project right here
     applyPendingProject(filePath)
-    // route directly (not via openDocumentPath) so creating a pdf emits only
-    // file_new and counts one doc-open — same as the blank workbook above
-    if (routeDocumentPath(filePath)) recordStarPromptDocOpen()
+    // route directly (not via openDocumentPath) so creating a pdf emits only file_new
+    routeDocumentPath(filePath)
     analytics.track('file_new', { kind: 'pdf' })
   } catch (err) {
     surfaceNewTabError(err)
@@ -1281,40 +1235,6 @@ function registerHomeIpc(): void {
   })
 
   ipcMain.handle(HOME_CHANNELS.githubStars, () => fetchGithubStars())
-
-  // returning true also counts as "shown": the renderer displays it
-  // unconditionally, so no separate mark-shown round-trip is needed
-  ipcMain.handle(HOME_CHANNELS.starPromptShouldShow, (): StarPromptShow => {
-    if (starPromptSessionGrant) return starPromptSessionGrant
-    const now = Date.now()
-    const state = readStarPrompt()
-    const docOpens = state.docOpens ?? 0
-    // dev preview of the card without waiting out the value thresholds
-    // (same pattern as GENOFFICE_FAKE_UPDATE); nothing is recorded
-    if (!app.isPackaged && process.env.GENOFFICE_FORCE_STAR_PROMPT) return { show: true, docOpens }
-    const grant = (): StarPromptShow => {
-      writeStarPrompt(withShown(state, now))
-      starPromptSessionGrant = { show: true, docOpens }
-      return starPromptSessionGrant
-    }
-    // first launch after an upgrade: skip the value gates once for a
-    // never-prompted user (they are a proven repeat user already)
-    if (upgradeStarPromptPending) {
-      upgradeStarPromptPending = false
-      if (shouldShowUpgradeStarPrompt(state)) return grant()
-    }
-    if (!shouldShowStarPrompt(state, now)) return { show: false, docOpens }
-    return grant()
-  })
-
-  ipcMain.handle(HOME_CHANNELS.starPromptAction, (_event, action: unknown) => {
-    if (action !== 'starred' && action !== 'later') return
-    // the card was reacted to — drop the session grant so a later query (new
-    // shell window on macOS) re-evaluates the real rules (snooze / resolved)
-    starPromptSessionGrant = null
-    // 'later' needs no write: the display was already counted by the query
-    if (action === 'starred') writeStarPrompt(withResolved(readStarPrompt()))
-  })
 
   const cloudProjectsStorePath = () => join(app.getPath('userData'), 'cloud-projects.json')
 
@@ -2329,29 +2249,6 @@ app.whenReady().then(async () => {
   currentLang()
   // native menus/dialogs/scrollbars follow the persisted theme from first paint
   nativeTheme.themeSource = currentTheme()
-  // stamp the star-prompt install-age clock on the first launch carrying the feature,
-  // and detect upgrade launches (version changed since the previous run)
-  try {
-    const settings = readAppSettings(APP_SETTINGS_PATH())
-    const starState = readStarPrompt()
-    const stamped = withFirstRun(starState, Date.now())
-    if (stamped !== starState) writeStarPrompt(stamped)
-
-    const prevVersion =
-      typeof settings[LAST_RUN_VERSION_KEY] === 'string'
-        ? (settings[LAST_RUN_VERSION_KEY] as string)
-        : null
-    const currentVersion = app.getVersion()
-    upgradeStarPromptPending = isUpgradeLaunch(
-      prevVersion,
-      currentVersion,
-      settings.onboardingSeen === true,
-    )
-    if (prevVersion !== currentVersion)
-      writeAppSetting(APP_SETTINGS_PATH(), LAST_RUN_VERSION_KEY, currentVersion)
-  } catch {
-    // settings write failures must never block startup
-  }
   initAnalytics()
   analytics.track('app_launch')
   startSheetsCaptureServer()

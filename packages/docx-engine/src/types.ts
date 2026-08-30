@@ -499,6 +499,12 @@ export interface HeaderFooter {
    * set). Absent = legacy single centered line.
    */
   paras?: HfParagraph[]
+  /**
+   * New inline images to embed in the part on save (becomes word/media/* +
+   * relationship + a drawing paragraph). Renderer-added; parse never sets
+   * this — parsed images stay display-only and their bytes are preserved.
+   */
+  images?: NewImage[]
 }
 
 /** Placeholder for NUMPAGES (total pages) fields in headers/footers; the renderer substitutes the total page count and saving writes the field back (PAGE uses PAGE_MARK the same way) */

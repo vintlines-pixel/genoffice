@@ -4,6 +4,7 @@ import {
   TOTAL_PAGES_MARK,
   type HfImage,
   type HfParagraph,
+  type NewImage,
   type Run,
 } from '@genoffice/docx-engine'
 import { useI18n } from '../i18n/locale'
@@ -81,6 +82,7 @@ export function HeaderFooterArea({
   images,
   readOnly,
   onCommit,
+  onInsertImage,
   pageNo,
   pageTotal,
   style,
@@ -91,6 +93,8 @@ export function HeaderFooterArea({
   images?: HfImage[]
   readOnly?: boolean
   onCommit: (next: HfValue) => void
+  /** insert a picture from disk into this header/footer (renders the affordance when set) */
+  onInsertImage?: (image: NewImage) => void
   /** Page number shown for '#' (may be a section-formatted string); the continuous-flow canvas has no real page number, defaults to 1 */
   pageNo?: number | string
   /** Total page count shown for TOTAL_PAGES_MARK (NUMPAGES field), defaults to 1 */
@@ -100,10 +104,39 @@ export function HeaderFooterArea({
 }) {
   const { t } = useI18n()
   const [editing, setEditing] = useState(false)
+  const [inserting, setInserting] = useState(false)
   const editRef = useRef<HTMLDivElement>(null)
   const cancelRef = useRef(false)
   const initialTextRef = useRef('')
   const paras = hfParasOf(value)
+
+  const insertImage = async () => {
+    if (inserting) return
+    setInserting(true)
+    try {
+      const picked = await window.desktop.pickImage()
+      if (!picked) return
+      const mime = picked.mime
+      if (!/^image\/(png|jpeg|gif)$/.test(mime)) return
+      const dataUrl = `data:${mime};base64,${picked.base64}`
+      const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+        img.onerror = () => reject(new Error('Failed to read image'))
+        img.src = dataUrl
+      })
+      onInsertImage?.({
+        base64: picked.base64,
+        mime: mime as NewImage['mime'],
+        widthPx: size.width,
+        heightPx: size.height,
+      })
+    } catch {
+      /* dialog cancelled or image unreadable */
+    } finally {
+      setInserting(false)
+    }
+  }
 
   // The editing surface is a standalone element: content is injected here and React
   // does not manage its children; after commit the whole element unmounts, so text
@@ -189,6 +222,16 @@ export function HeaderFooterArea({
               />
             ))}
         </div>
+      )}
+      {!readOnly && onInsertImage && !editing && (
+        <button
+          className="page-hf-insert-image"
+          data-tip={t('ribbonPictureTip')}
+          disabled={inserting}
+          onClick={() => void insertImage()}
+        >
+          {t('ribbonPicture')}
+        </button>
       )}
       {editing ? (
         <div

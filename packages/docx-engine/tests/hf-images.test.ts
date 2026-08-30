@@ -181,6 +181,52 @@ describe('header/footer images (display-only Logo)', () => {
   })
 })
 
+describe('header image insertion (new images embed on save)', () => {
+  // 1x1 transparent PNG
+  const PNG_1X1 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+  it('embeds a new header image and reparses it alongside the existing logo', async () => {
+    const bytes = await buildHeaderLogoDocx()
+    const doc = await parseDocx(bytes)
+    const blocks = doc.blocks
+      .filter((b) => !b.hidden && b.docxIndex !== null)
+      .map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! }))
+    const saved = await saveDocx(doc, blocks, {
+      header: {
+        text: doc.headerText ?? '',
+        images: [{ base64: PNG_1X1, mime: 'image/png', widthPx: 7, heightPx: 7 }],
+      },
+    })
+    const reparsed = await parseDocx(saved)
+    // original 40x20 logo + the new 7x7 image
+    expect(reparsed.headerImages).toHaveLength(2)
+    const added = reparsed.headerImages!.find((i) => i.widthPx === 7 && i.heightPx === 7)
+    expect(added).toBeTruthy()
+    expect(added!.dataUrl.startsWith('data:image/png;base64,')).toBe(true)
+    // the header text survives the image insertion
+    expect(reparsed.headerText).toBe('Confidential')
+  })
+
+  it('embeds into a footer the same way', async () => {
+    const bytes = await buildDocx({ bodyXml: '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' })
+    const doc = await parseDocx(bytes)
+    const blocks = doc.blocks
+      .filter((b) => !b.hidden && b.docxIndex !== null)
+      .map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! }))
+    const saved = await saveDocx(doc, blocks, {
+      footer: {
+        text: '页脚',
+        images: [{ base64: PNG_1X1, mime: 'image/png', widthPx: 5, heightPx: 5 }],
+      },
+    })
+    const reparsed = await parseDocx(saved)
+    expect(reparsed.footerText).toBe('页脚')
+    expect(reparsed.footerImages).toHaveLength(1)
+    expect(reparsed.footerImages![0].widthPx).toBe(5)
+  })
+})
+
 describe('layout-table cell images (header logo in a w:tbl cell)', () => {
   const INLINE_LOGO =
     '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +

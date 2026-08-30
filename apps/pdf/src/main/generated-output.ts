@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 
 /** Pick a safe, unused PDF path inside the configured GenOffice save directory. */
 export function uniqueGeneratedPdfPath(
@@ -7,12 +7,12 @@ export function uniqueGeneratedPdfPath(
   suggestedName: string,
   pathExists: (path: string) => boolean = existsSync,
 ): string {
-  // Control characters are intentionally rejected from generated file names.
+  // Control characters and Windows-invalid filename characters are rejected
+  // from generated file names. Split on both path separators first — basename()
+  // would treat a leading "x:" as a Windows drive and silently drop it.
   // eslint-disable-next-line no-control-regex
-  const invalidFileNameCharacters = /[/\\:*?"<>|\u0000-\u001f]/g
-  let fileName = basename(String(suggestedName || 'merged.pdf'))
-    .replace(invalidFileNameCharacters, '_')
-    .trim()
+  const lastSegment = String(suggestedName || 'merged.pdf').split(/[/\\]/).pop() ?? ''
+  let fileName = lastSegment.replace(/[:*?"<>|\u0000-\u001f]/g, '_').trim()
   if (!fileName || fileName === '.' || fileName === '..') fileName = 'merged.pdf'
   if (!/\.pdf$/i.test(fileName)) fileName += '.pdf'
 

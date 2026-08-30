@@ -27,6 +27,7 @@ import {
   type WriteProtection,
   type HeaderFooter,
   type HfImage,
+  type NewImage,
   type NoteInfo,
   type SectionInfo,
   type SectionSettings,
@@ -557,8 +558,7 @@ export function App() {
     return raw?.filter((img) => !img.floating)
   }
 
-  const commitHf = (kind: 'header' | 'footer', next: HeaderFooter, viewOverride?: HfView) => {
-    const view = viewOverride ?? (kind === 'header' ? headerAreaView : footerAreaView)
+  const commitHf = (kind: 'header' | 'footer', next: HeaderFooter, viewOverride?: HfView) => {    const view = viewOverride ?? (kind === 'header' ? headerAreaView : footerAreaView)
     // multi-section and not the final one: use the per-section edit channel (that section becomes its own part; earlier sections are unaffected)
     if (view === 'default' && multiHf && hfSectionClamped < sections.length - 1) {
       const sec = sections[hfSectionClamped]
@@ -586,6 +586,27 @@ export function App() {
     setHfVariants((v) => ({ ...v, [key]: next }))
     setHfVariantsDirty((d) => (d.includes(key) ? d : [...d, key]))
   }
+  /** Display form of newly-added header/footer images (parsed images come from hfImagesOf) */
+  const hfNewImagesOf = (kind: 'header' | 'footer'): HfImage[] => {
+    const v = kind === 'header' ? shownHeader : shownFooter
+    return (v?.images ?? []).map((im) => ({
+      dataUrl: `data:${im.mime};base64,${im.base64}`,
+      widthPx: im.widthPx,
+      heightPx: im.heightPx,
+    }))
+  }
+
+  /** Insert a picture into the shown header/footer variant (same routing as text edits) */
+  const commitHfImage = (kind: 'header' | 'footer', image: NewImage) => {
+    const view = kind === 'header' ? headerAreaView : footerAreaView
+    const current = kind === 'header' ? shownHeader : shownFooter
+    const next: HeaderFooter = {
+      ...(current ?? { text: '' }),
+      images: [...(current?.images ?? []), image],
+    }
+    commitHf(kind, next, view)
+  }
+
   /** "Different first page" toggle, shared by the ribbon checkbox and the on-page chip */
   const toggleTitlePg = (on: boolean) => {
     setTitlePg(on)
@@ -4165,14 +4186,16 @@ export function App() {
                         (hfViewTouched && effHfView !== 'default') ||
                         shownHeader?.text ||
                         shownHeader?.paras?.length ||
+                        shownHeader?.images?.length ||
                         hfImagesOf('header')?.length,
                       ) && (
                         <HeaderFooterArea
                           kind="header"
                           value={shownHeader ?? { text: '' }}
-                          images={hfImagesOf('header')}
+                          images={[...(hfImagesOf('header') ?? []), ...hfNewImagesOf('header')]}
                           readOnly={isProtected || readMode}
-                          onCommit={(next) => commitHf('header', next)}
+                          onCommit={(next) => commitHf('header', { ...next, images: shownHeader?.images })}
+                          onInsertImage={(img) => commitHfImage('header', img)}
                           pageTotal={pageInfo.total}
                           style={edgeHeaderStyle}
                         />
@@ -4197,14 +4220,16 @@ export function App() {
                         shownFooter?.text ||
                         shownFooter?.pageNumber ||
                         shownFooter?.paras?.length ||
+                        shownFooter?.images?.length ||
                         hfImagesOf('footer')?.length,
                       ) && (
                         <HeaderFooterArea
                           kind="footer"
                           value={shownFooter ?? { text: '' }}
-                          images={hfImagesOf('footer')}
+                          images={[...(hfImagesOf('footer') ?? []), ...hfNewImagesOf('footer')]}
                           readOnly={isProtected || readMode}
-                          onCommit={(next) => commitHf('footer', next)}
+                          onCommit={(next) => commitHf('footer', { ...next, images: shownFooter?.images })}
+                          onInsertImage={(img) => commitHfImage('footer', img)}
                           pageNo={lastPageNo?.text ?? pageInfo.total}
                           pageTotal={pageInfo.total}
                           style={edgeFooterStyle}

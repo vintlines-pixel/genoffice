@@ -456,32 +456,28 @@ export async function saveDocx(
   const newMedia: Array<{ path: string; base64: string }> = []
   const usedExtensions = new Set<string>()
   // identical bytes embed ONE media part (repeated logos / per-page backgrounds)
-  const mediaRelByContent = new Map<string, string>()
+  const mediaRelByContent = new Map<string, { rId: string; path: string }>()
   let imageSeq = nextImageSeq(zip)
   let docPrSeq = imageSeq
-  /** Land image bytes as a media part + relationship; returns the rId.
-   *  Identical bytes reuse ONE media part (repeated logos / per-page backgrounds). */
-  const embedImageMedia = (image: { base64: string; mime: NewImage['mime'] }): string => {
+  /** Land image bytes as a media part; returns the relationship id + part path.
+   *  Identical bytes reuse ONE media part (repeated logos / per-page backgrounds).
+   *  The relationship itself is registered by the caller (body vs header/footer part). */
+  const embedImageMedia = (image: { base64: string; mime: NewImage['mime'] }): { rId: string; path: string } => {
     const ext = IMAGE_EXT[image.mime]
     const contentKey = `${image.mime}:${image.base64}`
-    let rId = mediaRelByContent.get(contentKey)
-    if (rId === undefined) {
+    let hit = mediaRelByContent.get(contentKey)
+    if (hit === undefined) {
       const mediaPath = `word/media/aidocs${imageSeq++}.${ext}`
-      rId = `rId${nextRelNum++}`
-      newRels.push({
-        rId,
-        type: IMAGE_REL_TYPE,
-        target: mediaPath.replace(/^word\//, ''),
-        external: false,
-      })
+      const rId = `rId${nextRelNum++}`
+      hit = { rId, path: mediaPath }
       newMedia.push({ path: mediaPath, base64: image.base64 })
       usedExtensions.add(ext)
-      mediaRelByContent.set(contentKey, rId)
+      mediaRelByContent.set(contentKey, hit)
     }
-    return rId
+    return hit
   }
-  const embedImage = (image: NewImage): string => {
-    const rId = embedImageMedia(image)
+  /** drawing paragraph XML for one inline image (shared by body and header/footer embeds) */
+  const embedImageDrawing = (image: NewImage, rId: string): string => {
     const cx = Math.max(1, Math.round(image.widthPx * EMU_PER_PX))
     const cy = Math.max(1, Math.round(image.heightPx * EMU_PER_PX))
     // Word lays the drawing out against the unrotated wp:extent plus
@@ -523,6 +519,21 @@ export async function saveDocx(
     return image.wrap
       ? applyImageWrap(xml, image.wrap, image.posOffsetEmu, undefined, image.zOrder)
       : xml
+  }
+  /** body inline image: relationship lands in word/_rels/document.xml.rels */
+  const embedImage = (image: NewImage): string => {
+    const { rId, path } = embedImageMedia(image)
+    newRels.push({ rId, type: IMAGE_REL_TYPE, target: path.replace(/^word\//, ''), external: false })
+    return embedImageDrawing(image, rId)
+  }
+  /** header/footer inline image: relationship lands in that part's own rels */
+  const hfImageRels = new Map<string, Array<{ rId: string; type: string; target: string }>>()
+  const embedHfImage = (image: NewImage, partPath: string): string => {
+    const { rId, path } = embedImageMedia(image)
+    const list = hfImageRels.get(partPath) ?? []
+    list.push({ rId, type: IMAGE_REL_TYPE, target: path.replace(/^word\//, '') })
+    hfImageRels.set(partPath, list)
+    return embedImageDrawing(image, rId)
   }
 
   // ---- new embedded charts: chart part + workbook + relationship + drawing paragraph ----
@@ -648,10 +659,12 @@ export async function saveDocx(
       if (watermarkOnly && kind === 'header' && originalXml) {
         partXml = patchWatermarkInPart(originalXml, watermark)
       }
-      if (partXml === null) partXml = headerFooterPartXml(kind, hf, watermark, originalXml)
+      if (partXml === null)
+        partXml = headerFooterPartXml(kind, hf, watermark, originalXml, (im) =>
+          embedHfImage(im, path),
+        )
       hfParts.push({ path, xml: partXml })
     } else {
-      const partXml = headerFooterPartXml(kind, hf, watermark)
       let n = 1
       while (
         zip.file(`word/${kind}${n}.xml`) ||
@@ -659,9 +672,13 @@ export async function saveDocx(
       )
         n++
       const filename = `${kind}${n}.xml`
+      const partPath = `word/${filename}`
+      const partXml = headerFooterPartXml(kind, hf, watermark, null, (im) =>
+        embedHfImage(im, partPath),
+      )
       const newRId = `rId${nextRelNum++}`
       newRels.push({ rId: newRId, type: HF_REL_TYPE[kind], target: filename, external: false })
-      hfParts.push({ path: `word/${filename}`, xml: partXml })
+      hfParts.push({ path: partPath, xml: partXml })
       hfRefTags.push(`<w:${kind}Reference w:type="${hfType}" r:id="${newRId}"/>`)
       hfOverrides.push(
         `<Override PartName="/word/${filename}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${kind}+xml"/>`,
@@ -707,9 +724,13 @@ export async function saveDocx(
       const path = target.startsWith('/') ? target.slice(1) : `word/${target}`
       const file = zip.file(path)
       const originalXml = file ? await file.async('string') : null
-      hfParts.push({ path, xml: headerFooterPartXml(edit.kind, edit.hf, null, originalXml) })
+      hfParts.push({
+        path,
+        xml: headerFooterPartXml(edit.kind, edit.hf, null, originalXml, (im) =>
+          embedHfImage(im, path),
+        ),
+      })
     } else {
-      const partXml = headerFooterPartXml(edit.kind, edit.hf, null)
       let n = 1
       while (
         zip.file(`word/${edit.kind}${n}.xml`) ||
@@ -717,9 +738,13 @@ export async function saveDocx(
       )
         n++
       const filename = `${edit.kind}${n}.xml`
+      const partPath = `word/${filename}`
+      const partXml = headerFooterPartXml(edit.kind, edit.hf, null, null, (im) =>
+        embedHfImage(im, partPath),
+      )
       const newRId = `rId${nextRelNum++}`
       newRels.push({ rId: newRId, type: HF_REL_TYPE[edit.kind], target: filename, external: false })
-      hfParts.push({ path: `word/${filename}`, xml: partXml })
+      hfParts.push({ path: partPath, xml: partXml })
       hfOverrides.push(
         `<Override PartName="/word/${filename}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${edit.kind}+xml"/>`,
       )
@@ -954,7 +979,16 @@ export async function saveDocx(
     } else if (fb.kind === 'xml') {
       xml = fb.xml
       fbDocxIndex = fb.docxIndex
-      if (fb.replaceImage) xml = retargetImageBlip(xml, embedImageMedia(fb.replaceImage))
+      if (fb.replaceImage) {
+        const { rId, path } = embedImageMedia(fb.replaceImage)
+        newRels.push({
+          rId,
+          type: IMAGE_REL_TYPE,
+          target: path.replace(/^word\//, ''),
+          external: false,
+        })
+        xml = retargetImageBlip(xml, rId)
+      }
     } else if (fb.kind === 'chart') {
       xml = await embedChart(fb.chart, fb.extentPx)
     } else {
@@ -1239,6 +1273,30 @@ export async function saveDocx(
   for (const part of hfParts) {
     if (!zip.file(part.path)) out.file(part.path, part.xml)
   }
+  // Header/footer image relationships live in each part's OWN rels file
+  // (word/_rels/headerN.xml.rels), not the document rels — merge or create.
+  for (const [partPath, rels] of hfImageRels) {
+    const relsPath = partPath.replace(/([^/]+)$/, '_rels/$1.rels')
+    const inserts = rels
+      .map(
+        (r) =>
+          `<Relationship Id="${escapeXmlAttr(r.rId)}" Type="${r.type}" Target="${escapeXmlAttr(r.target)}"/>`,
+      )
+      .join('')
+    const existing = zip.file(relsPath)
+    if (existing) {
+      const xml = await existing.async('string')
+      out.file(relsPath, xml.replace('</Relationships>', `${inserts}</Relationships>`))
+    } else {
+      out.file(
+        relsPath,
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          inserts +
+          '</Relationships>',
+      )
+    }
+  }
   if (relsChanged && relsXml && !zip.file(relsPath)) {
     out.file(relsPath, relsXml)
   }
@@ -1348,11 +1406,19 @@ function patchWatermarkInPart(originalXml: string, watermark: string | null): st
   return `${prefix}${rootOpen}${wm}${kept.map((c) => c.xml).join('')}</w:hdr>`
 }
 
+/** Drawing namespaces a freshly-created header/footer part needs once it embeds a new image */
+const DRAWING_NS =
+  ' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"' +
+  ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"' +
+  ' xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"'
+
 function headerFooterPartXml(
   kind: 'header' | 'footer',
   hf: HeaderFooter,
   watermark: string | null = null,
   originalXml: string | null = null,
+  /** embeds a new inline image as media + relationship + drawing paragraph */
+  embedImage?: (image: NewImage) => string,
 ): string {
   const root = kind === 'header' ? 'w:hdr' : 'w:ftr'
   const textRun = (t: string) =>
@@ -1436,7 +1502,9 @@ function headerFooterPartXml(
     content = `<w:p><w:pPr><w:jc w:val="center"/></w:pPr>${runs.join('')}</w:p>`
   }
   const watermarkXml = kind === 'header' && watermark ? watermarkParagraphXml(watermark) : ''
-  const body = `${watermarkXml}${content}`
+  const imageXml =
+    hf.images?.length && embedImage ? hf.images.map((im) => embedImage(im)).join('') : ''
+  const body = `${watermarkXml}${content}${imageXml}`
   // Surgical merge: non-paragraph children of the original part (tables/sdt) and
   // paragraphs containing images/objects (logos etc., which are not in the text-paragraph
   // model) keep their original bytes; only the set of text paragraphs is replaced as a
@@ -1477,7 +1545,7 @@ function headerFooterPartXml(
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
     `<${root} xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"` +
     ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' +
-    `${WATERMARK_NS}>` +
+    `${imageXml ? DRAWING_NS : ''}${WATERMARK_NS}>` +
     `${body}</${root}>`
   )
 }
