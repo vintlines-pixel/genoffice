@@ -13,6 +13,7 @@ electron-builder.env
 # Local ad-hoc e2e driver scripts (not pushed); the folder and README are tracked, the scripts are not
 /scripts/drivers/driver.*.mjs
 /probe*.mjs
+/.probe-ud/
 /apps/shell/build/THIRD-PARTY-NOTICES.txt
 /example/
 /.task/
