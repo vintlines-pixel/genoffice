@@ -1,0 +1,321 @@
+import type {
+  AiImageGenerationConfig,
+  AiProviderId,
+  AiProviderMeta,
+  AiSettings,
+  LegacyAiSettings,
+} from './types'
+
+/**
+ * Genspark server-side LLM proxy endpoints. All three protocols share the
+ * api_key from the gsk login; model ids follow the proxy's own naming scheme,
+ * which differs from the official vendor ids.
+ */
+export const GENSPARK_LLM_BASE_URLS = {
+  anthropic: 'https://www.genspark.ai/api/anthropic',
+  gemini: 'https://www.genspark.ai/api/llm_proxy/gemini/v1beta',
+  openai: 'https://www.genspark.ai/api/llm_proxy/v1',
+} as const
+
+/**
+ * Splits GenOffice usage out of the proxy's default "Claw" billing bucket
+ * (the backend attributes gsk-key traffic by X-Agent-Type). Only sent to the
+ * Genspark proxy — never to direct vendor APIs.
+ */
+export const GENSPARK_AGENT_TYPE = 'genoffice'
+
+export function gensparkAttributionHeaders(baseUrl?: string): Record<string, string> {
+  return baseUrl?.startsWith('https://www.genspark.ai')
+    ? { 'X-Agent-Type': GENSPARK_AGENT_TYPE }
+    : {}
+}
+
+export const AI_PROVIDERS: AiProviderMeta[] = [
+  {
+    id: 'genspark',
+    label: 'Genspark',
+    models: [
+      'claude-opus-4-7',
+      'claude-opus-4-8',
+      'claude-sonnet-4-6',
+      'gpt-5.6',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+      'gemini-3.1-pro-preview',
+      'gemini-3-flash-preview',
+      'gemini-3.7-flash',
+    ],
+    defaultModel: 'claude-opus-4-7',
+    keyPlaceholder: 'Not required - sign in to Genspark',
+  },
+  {
+    id: 'anthropic',
+    label: 'Claude',
+    // current-generation ids per platform.claude.com models overview (2026-08)
+    models: [
+      'claude-opus-5',
+      'claude-sonnet-5',
+      'claude-fable-5',
+      'claude-opus-4-8',
+      'claude-opus-4-7',
+      'claude-sonnet-4-6',
+      'claude-haiku-4-5-20251001',
+    ],
+    defaultModel: 'claude-sonnet-5',
+    keyPlaceholder: 'sk-ant-api03-...',
+  },
+  {
+    id: 'gemini',
+    label: 'Gemini',
+    // 3.x lineup per ai.google.dev/gemini-api/docs/models (2026-08). 3.7 Flash is
+    // the current stable Flash; 3.1 Pro is still preview-only.
+    models: [
+      'gemini-3.7-flash',
+      'gemini-3.1-pro-preview',
+      'gemini-3.6-flash',
+      'gemini-3.5-flash-lite',
+    ],
+    defaultModel: 'gemini-3.7-flash',
+    keyPlaceholder: 'AIza...',
+  },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    // V4 ids per api-docs.deepseek.com (2026-08). Vision Exp is available
+    // through the normal DeepSeek API key; indirect-route aliases such as
+    // `-openrouter` do not belong in this direct-provider list.
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp'],
+    defaultModel: 'deepseek-v4-pro',
+    keyPlaceholder: 'sk-...',
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    // GPT-5.6 naming: sol is the flagship (the bare `gpt-5.6` alias resolves to
+    // it, but spell it out so the picker says which tier it is), terra balances
+    // cost/intelligence, luna is the high-volume tier (2026-08)
+    models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
+    defaultModel: 'gpt-5.6-terra',
+    keyPlaceholder: 'sk-...',
+  },
+  {
+    id: 'kimi',
+    label: 'Kimi',
+    models: ['kimi-k3'],
+    defaultModel: 'kimi-k3',
+    keyPlaceholder: 'sk-...',
+  },
+  {
+    id: 'glm',
+    label: 'GLM',
+    // bigmodel.cn text-model lineup (2026-08); 5.3 and 5.2 share a base model,
+    // 5-Turbo is the cheap tier
+    models: ['glm-5.3', 'glm-5.2', 'glm-5-turbo'],
+    defaultModel: 'glm-5.3',
+    keyPlaceholder: 'xxxxxxxx.xxxxxxxx',
+  },
+  {
+    id: 'qwen',
+    label: 'Qwen',
+    // Versioned DashScope ids: the bare qwen-max alias still points at a
+    // Qwen2.5-era snapshot, so name the 3.x tiers explicitly (2026-08)
+    models: ['qwen3.8-max', 'qwen3.7-plus', 'qwen3.7-flash'],
+    defaultModel: 'qwen3.8-max',
+    keyPlaceholder: 'sk-...',
+  },
+  {
+    id: 'doubao',
+    label: 'Doubao',
+    // Ark ids are dashed and date-pinned; it also accepts ep-... inference
+    // endpoint ids in the model field
+    models: ['doubao-seed-2-1-pro-260628', 'doubao-seed-2-1-turbo-260628'],
+    defaultModel: 'doubao-seed-2-1-pro-260628',
+    keyPlaceholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+  },
+  {
+    id: 'minimax',
+    label: 'MiniMax',
+    // M3 is the current agentic/tool-use model; M2.5 moved to the legacy tier
+    models: ['MiniMax-M3', 'MiniMax-M2.7'],
+    defaultModel: 'MiniMax-M3',
+    keyPlaceholder: 'eyJ...',
+  },
+  {
+    id: 'xai',
+    label: 'Grok',
+    models: ['grok-4.6', 'grok-4.5'],
+    defaultModel: 'grok-4.6',
+    keyPlaceholder: 'xai-...',
+  },
+  {
+    id: 'mistral',
+    label: 'Mistral',
+    // `-latest` aliases track the newest GA snapshot. Medium 3.5 is Mistral's
+    // agentic tier; codestral is a code-completion/FIM model, not an agent driver.
+    models: ['mistral-medium-latest', 'mistral-large-latest', 'mistral-small-latest'],
+    defaultModel: 'mistral-medium-latest',
+    keyPlaceholder: 'API Key',
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    // vendor-prefixed slugs exactly as openrouter.ai/api/v1/models lists them —
+    // there is no `openai/gpt-5.6` alias there, only the per-tier ids
+    models: [
+      'openrouter/auto',
+      'anthropic/claude-sonnet-5',
+      'openai/gpt-5.6-sol',
+      'moonshotai/kimi-k3',
+    ],
+    defaultModel: 'openrouter/auto',
+    keyPlaceholder: 'sk-or-...',
+  },
+  {
+    id: 'custom',
+    label: 'Custom',
+    models: [],
+    defaultModel: '',
+    keyPlaceholder: 'API Key',
+    needsBaseUrl: true,
+  },
+]
+
+/**
+ * Fresh settings for a bring-your-own-key install: the user configures their
+ * own endpoint (custom provider or any api-key vendor) in Settings; Genspark
+ * login stays available but is never required. Cloud tools default off — the
+ * gsk backend is only usable while signed in, and every gsk-only feature
+ * (image generation, media analysis, cloud slide/convert) hides itself when
+ * the flag is off. Callers may still pre-provision keys via `defaultApiKeys`.
+ */
+export function defaultAiSettings(
+  defaultApiKeys?: Partial<Record<AiProviderId, string>>,
+): AiSettings {
+  const providers = {} as AiSettings['providers']
+  for (const meta of AI_PROVIDERS) {
+    providers[meta.id] = {
+      apiKey: defaultApiKeys?.[meta.id] ?? '',
+      model: meta.defaultModel,
+      baseUrl: meta.needsBaseUrl ? '' : undefined,
+    }
+  }
+  return { provider: 'custom', providers, gskToolsEnabled: false }
+}
+
+/** false only on an explicit opt-out; absent (pre-toggle settings files) means on */
+export function cloudToolsEnabled(settings: Pick<AiSettings, 'gskToolsEnabled'>): boolean {
+  return settings.gskToolsEnabled !== false
+}
+
+/** true when the settings carry a usable OpenAI-compatible image endpoint (renderer-safe predicate) */
+export function hasImageApiConfig(
+  cfg: Partial<AiImageGenerationConfig> | undefined,
+): cfg is AiImageGenerationConfig {
+  return !!cfg?.baseUrl?.trim() && !!cfg.apiKey?.trim() && !!cfg.model?.trim()
+}
+
+/**
+ * The stored provider selection is honored as-is: BYOK is the default mode,
+ * and a half-filled config must surface a clear "configure your API key"
+ * error at request time (the ai:stream/ai:chat handlers already emit one)
+ * instead of silently rerouting to another backend. Only genspark keeps its
+ * special role — its key is injected from the gsk login state per request —
+ * and unknown ids from a hand-edited settings file fall back to the default
+ * provider ('custom').
+ */
+export function activeProvider(settings: AiSettings): AiProviderId {
+  const provider = settings.provider
+  if (provider === 'genspark') return 'genspark'
+  if (!AI_PROVIDERS.some((m) => m.id === provider)) return 'custom'
+  return provider
+}
+
+/**
+ * Model ids a vendor has stopped serving, mapped to their replacement. A
+ * stored selection outlives the provider list, so without this remap an old
+ * settings file keeps sending an id the API now rejects.
+ */
+const RETIRED_MODELS: Partial<Record<AiProviderId, Record<string, string>>> = {
+  // aliases retired 2026-07-24; DeepSeek pointed both at the V4-Flash line,
+  // where thinking mode is a request parameter rather than a separate id
+  deepseek: {
+    'deepseek-chat': 'deepseek-v4-flash',
+    'deepseek-reasoner': 'deepseek-v4-flash',
+  },
+}
+
+/** pasted keys/URLs often carry stray whitespace, which turns into a 401 with a valid key */
+function trimConfigs(providers: AiSettings['providers']): AiSettings['providers'] {
+  const trimmed = { ...providers }
+  for (const [id, config] of Object.entries(trimmed)) {
+    trimmed[id as AiProviderId] = {
+      ...config,
+      apiKey: config.apiKey?.trim() ?? '',
+      ...(config.baseUrl !== undefined ? { baseUrl: config.baseUrl.trim() } : {}),
+    }
+  }
+  return trimmed
+}
+
+function migrateRetiredModels(providers: AiSettings['providers']): AiSettings['providers'] {
+  const migrated = { ...providers }
+  for (const [id, replacements] of Object.entries(RETIRED_MODELS)) {
+    const config = migrated[id as AiProviderId]
+    const replacement = config?.model ? replacements[config.model] : undefined
+    if (replacement) migrated[id as AiProviderId] = { ...config, model: replacement }
+  }
+  return migrated
+}
+
+/**
+ * Sanitized image-generation config from stored settings: trimmed, and only
+ * present when all three fields are usable (a half-filled config must read
+ * as "not configured" so the feature stays hidden instead of erroring).
+ */
+function imageGenerationFrom(
+  stored: Partial<AiSettings>,
+): { imageGeneration: AiImageGenerationConfig } | {} {
+  const cfg = stored.imageGeneration
+  const baseUrl = cfg?.baseUrl?.trim() ?? ''
+  const apiKey = cfg?.apiKey?.trim() ?? ''
+  const model = cfg?.model?.trim() ?? ''
+  if (!baseUrl || !apiKey || !model) return {}
+  return { imageGeneration: { baseUrl, apiKey, model } }
+}
+
+/**
+ * Merge on-disk settings over freshly computed defaults, migrating the
+ * pre-provider shape (a single OpenAI-compatible endpoint) into the
+ * "custom" provider slot. `stored` is whatever the caller read from its
+ * settings file (already JSON-parsed); this function does no file I/O.
+ */
+export function resolveAiSettings(
+  stored: Partial<AiSettings> & LegacyAiSettings,
+  defaults: AiSettings,
+): AiSettings {
+  if (!stored.providers) {
+    if (stored.apiKey) {
+      defaults.providers.custom = {
+        apiKey: stored.apiKey.trim(),
+        model: stored.model ?? '',
+        baseUrl: (stored.baseUrl ?? 'https://api.openai.com/v1').trim(),
+      }
+    }
+    return defaults
+  }
+  return {
+    provider: stored.provider ?? defaults.provider,
+    providers: trimConfigs(migrateRetiredModels({ ...defaults.providers, ...stored.providers })),
+    // A pre-toggle settings file (multi-provider shape, flag absent) predates
+    // the cloud-tools switch and the on-by-default era: keep it on so an
+    // existing signed-in user doesn't lose gsk tools after an update. Only
+    // fresh installs (no stored providers object) get the new off default.
+    gskToolsEnabled:
+      stored.gskToolsEnabled ?? (stored.providers ? true : (defaults.gskToolsEnabled ?? true)),
+    // pass-through optional fields the defaults don't carry
+    ...(stored.serperApiKey !== undefined && stored.serperApiKey.trim() !== ''
+      ? { serperApiKey: stored.serperApiKey.trim() }
+      : {}),
+    ...imageGenerationFrom(stored),
+  }
+}

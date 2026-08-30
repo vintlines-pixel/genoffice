@@ -1,0 +1,27 @@
+{
+  "name": "@genoffice/electron-utils",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared helpers for the Electron main processes (uses Electron via peer imports where needed)",
+  "exports": {
+    ".": "./src/index.ts",
+    "./drop-open": "./src/drop-open.ts",
+    "./ai-ipc": "./src/ai-ipc.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "@genoffice/ai-provider": "*",
+    "@genoffice/ai-search": "*",
+    "parse5": "^8.0.1"
+  }
+}

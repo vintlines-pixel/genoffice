@@ -1,0 +1,58 @@
+node_modules
+out/
+dist/
+release/
+*.log
+.DS_Store
+.refs/
+.env
+.env.*
+electron-builder.env
+~$*
+
+# Local ad-hoc e2e driver scripts (not pushed); the folder and README are tracked, the scripts are not
+/scripts/drivers/driver.*.mjs
+/probe*.mjs
+/apps/shell/build/THIRD-PARTY-NOTICES.txt
+/example/
+/.task/
+/docs-archive/
+.idea/
+.claude/
+
+# Local build artifacts dropped in the repo root
+/*.dmg
+/*.exe
+/*.zip
+/windows/
+
+# Playwright artifacts
+/test-results/
+
+.cursor/rules/git-remote.mdc
+__pycache__/
+/notes/
+/MEMORY.md
+
+# Local fidelity-run scratch space: production repro documents and pack caches.
+# Never committable — a stray `git add -A` would push user files public.
+/working_dir/
+
+# One-off verification tests kept while chasing a fix; promote to a real test
+# file (or delete) instead of committing them under this name.
+_scratch-*
+
+# Rust sidecar build output (cargo's target/ tree can be hundreds of MB)
+target/
+
+# Generated e2e fixtures (regenerate with `npm run fixtures` per package)
+fixtures/generated/
+apps/sheets/fixtures/generated/
+
+# Playwright e2e output under e2e/ (root-level /test-results/ is covered above)
+e2e/artifacts/
+e2e/test-results/
+e2e/playwright-report/
+
+# Local AI-agent session memory (project-memory index + experience notes)
+.dsh-project-memory/
