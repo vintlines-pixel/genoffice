@@ -176,7 +176,6 @@ import {
   IconHighlight,
   IconUnderline,
   IconStrike,
-  IconEditText,
   IconInk,
   IconRect,
   IconEllipse,
@@ -192,7 +191,6 @@ import {
   IconExportImg,
   IconConvertPdf,
   IconInsertImage,
-  IconEditImage,
   IconNight,
   IconSpread,
   IconSinglePage,
@@ -361,7 +359,11 @@ export default function App() {
   useEffect(() => {
     if (!pendingTextInsert) setTextInsertPointer(null)
   }, [pendingTextInsert])
-  const [editTextMode, setEditTextMode] = useState(false)
+  /** Last-used insert font size; the next insert starts there, then inherits from
+      the text nearest the click point when one is close (Sejda-style). */
+  const insertFontSizeRef = useRef(12)
+  /** The insert whose inline click-to-type input is open; typing edits it live */
+  const [insertDraftId, setInsertDraftId] = useState<string | null>(null)
   const [textDraft, setTextDraft] = useState<TextDraft | null>(null)
   /** Current draft for async callbacks (block-probe fallback runs after renders) */
   const textDraftRef = useRef<TextDraft | null>(null)
@@ -381,9 +383,13 @@ export default function App() {
     lineHoverRef.current = null
     setLineHover(null)
   }
-  /** WPS-style paragraph boxes shown while edit-text mode is on, clustered lazily
-      per visible page from the search index (PDF space; cleared on doc reload) */
+  /** WPS-style paragraph boxes shown under direct editing, clustered lazily
+      per visible page from the search index (PDF space; cleared on doc reload).
+      Clustering waits for the first pointer-over: building the search index is a
+      full-document walk, and hover affordances (not clustering) are what the
+      pointer needs first — a click always follows a hover, so nothing is lost. */
   const [pageBlocks, setPageBlocks] = useState<Map<number, TextBlock[]>>(new Map())
+  const [pagePointerSeen, setPagePointerSeen] = useState(false)
   const [blockHover, setBlockHover] = useState<{ origIdx: number; idx: number } | null>(null)
   /** Border-drag of a clustered block (WPS-style move); client-space endpoints,
       converted to a PDF-space delta on release like the image-edit drag */
@@ -554,8 +560,8 @@ export default function App() {
   /** Latest imageEdits for async callbacks (same rationale as pushUndoRef) */
   const imageEditsRef = useRef(imageEdits)
   imageEditsRef.current = imageEdits
-  const [editImageMode, setEditImageMode] = useState(false)
-  /** Existing content-stream images per page, listed while edit-image mode is on */
+  /** Existing content-stream images per page; listed once per editable doc so the
+      direct-edit hit layer can target them (see the effect below) */
   const [pageImages, setPageImages] = useState<PageImageRef[]>([])
   /** Baseline metadata loaded from the PDF; pending imageEdits carry any changes. */
   const [savedStaticFormFills, setSavedStaticFormFills] = useState<StaticFormFillRecord[]>([])
@@ -603,6 +609,8 @@ export default function App() {
   const draftTaRef = useRef<HTMLTextAreaElement | null>(null)
   /** Shared color-picker popover on the text-edit style bar */
   const [draftColorOpen, setDraftColorOpen] = useState(false)
+  /** Color picker on the text-insert property bar (selection popup) */
+  const [insertColorOpen, setInsertColorOpen] = useState(false)
   /** Colored mirror behind the transparent-text textarea; scroll-synced to it */
   const draftGhostRef = useRef<HTMLDivElement | null>(null)
   const [drawColor, setDrawColor] = useState<[number, number, number]>(DRAW_COLORS[0]!.rgb)
@@ -1118,6 +1126,19 @@ export default function App() {
   /** pdf-lib cannot write encrypted files, including owner-protected files that open without a password. */
   const readOnly = status === 'ready' && (passwordRef.current !== undefined || documentEncrypted)
 
+  /** Sejda-style direct editing: whenever the doc is editable and no transient
+      placement tool is armed, the page behaves like an editor — hovering shows
+      text/image affordances and a plain click starts editing the text or selects
+      the image under the pointer. No dedicated edit modes. */
+  const directEdit =
+    !readOnly &&
+    !drawTool &&
+    !imagePick &&
+    !pendingSign &&
+    !pendingTextInsert &&
+    !pendingStaticFill &&
+    !noteDraft
+
   useEffect(() => {
     if (
       activeFormWidgetId &&
@@ -1142,15 +1163,24 @@ export default function App() {
     [dispSize],
   )
 
+  /** Cumulative row-top offsets, prefix-summed once per (rows, scale) change.
+   *  rowTops[i] = top of row i; rowTops[rows.length] = total content height.
+   *  Must stay O(1) per query: the scroll handler runs on every scroll event,
+   *  and recomputing the sum from row 0 per call made the current-page lookup
+   *  O(rowIdx²) — progressively jankier the deeper a large document is scrolled. */
+  const rowTops = useMemo(() => {
+    const tops = new Array<number>(rows.length + 1)
+    let y = PAGE_GAP
+    for (let i = 0; i < rows.length; i++) {
+      tops[i] = y
+      y += rowSize(rows[i]!).height * scale + PAGE_GAP
+    }
+    tops[rows.length] = y
+    return tops
+  }, [rows, rowSize, scale])
+
   /** Cumulative row-top offset (with gaps), shared by scroll positioning and current-page calc */
-  const rowTop = useCallback(
-    (rowIdx: number) => {
-      let y = PAGE_GAP
-      for (let i = 0; i < rowIdx; i++) y += rowSize(rows[i]!).height * scale + PAGE_GAP
-      return y
-    },
-    [rows, rowSize, scale],
-  )
+  const rowTop = useCallback((rowIdx: number) => rowTops[rowIdx]!, [rowTops])
 
   /** Scroll offset that keeps the content point at the viewport top in place across a scale
    *  change. Row-exact: the fixed page gaps don't scale, so a plain scrollTop*ratio drifts
@@ -1306,10 +1336,19 @@ export default function App() {
     const el = scrollRef.current
     if (!el || rows.length === 0) return
     const anchor = el.scrollTop + el.clientHeight * 0.4
+    // rowTops is strictly increasing (every row adds height + gap): binary search
+    // the last row whose top sits at/above the anchor. O(log rows) per scroll event.
+    let lo = 0
+    let hi = rows.length - 1
     let rowIdx = 0
-    for (let i = 0; i < rows.length; i++) {
-      if (rowTop(i) <= anchor) rowIdx = i
-      else break
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if (rowTop(mid) <= anchor) {
+        rowIdx = mid
+        lo = mid + 1
+      } else {
+        hi = mid - 1
+      }
     }
     const page = visList.indexOf(rows[rowIdx]![0]!) + 1
     setCurrentPage(page)
@@ -1442,10 +1481,11 @@ export default function App() {
     window.pdfApi.setDirty(dirty)
   }, [dirty])
 
-  // Existing images are listed while edit-image mode is on; `doc` in the deps refreshes
-  // the list after a post-save reload (object rects may have changed on disk)
+  // Existing images are listed once per editable doc (direct editing keeps image hit
+  // targets available at all times); `doc` in the deps refreshes the list after a
+  // post-save reload (object rects may have changed on disk)
   useEffect(() => {
-    if (!editImageMode || !filePath || !doc) {
+    if (readOnly || !filePath || !doc) {
       setPageImages([])
       return
     }
@@ -1461,7 +1501,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [editImageMode, filePath, doc])
+  }, [readOnly, filePath, doc])
 
   // ── Undo/redo: push a full snapshot before each change; consecutive input on the same form field coalesces into one step ──
 
@@ -1599,10 +1639,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc])
 
-  /** Cluster paragraph boxes for pages scrolled into view while edit-text mode is on.
-      Reruns after its own setPageBlocks commit and finds nothing missing, so it settles */
+  /** Cluster paragraph boxes for pages scrolled into view while direct editing is
+      active. Reruns after its own setPageBlocks commit and finds nothing missing, so it settles */
   useEffect(() => {
-    if (!editTextMode || readOnly || !doc) return
+    if (!directEdit || !doc || !pagePointerSeen) return
     const missing: number[] = []
     for (const r of visibleRows)
       for (const i of rows[r] ?? []) if (!pageBlocks.has(i)) missing.push(i)
@@ -1630,7 +1670,7 @@ export default function App() {
     return () => {
       stale = true
     }
-  }, [editTextMode, readOnly, doc, visibleRows, rows, pageBlocks, getSearchIndex])
+  }, [directEdit, doc, pagePointerSeen, visibleRows, rows, pageBlocks, getSearchIndex])
 
   /** Saved markup/note annotations are keyed to the loaded doc; drop them on save-reload */
   useEffect(() => {
@@ -1752,15 +1792,10 @@ export default function App() {
     return quads.size > 0 ? quads : null
   }
 
-  /** Mouse released over selected text → show the markup bar centered above the selection box (below if it doesn't fit) */
+  /** Mouse released over selected text → show the markup bar centered above the selection box (below if it doesn't fit).
+      Direct editing keeps drag-select = markup selection (Sejda-style): a drag never
+      opens the text editor, the click on the line does. */
   const handleMouseUp = () => {
-    // In edit-text mode a drag means "choose the characters to edit" (the click
-    // after mouseup opens the editor preselected), not the markup popup — and any
-    // previously cached AI scope no longer matches what the user sees
-    if (editTextMode && !readOnly) {
-      setAiSelection(null)
-      return
-    }
     setTimeout(() => {
       const el = scrollRef.current
       const sel = window.getSelection()
@@ -2336,67 +2371,6 @@ export default function App() {
     }
   }
 
-  /** A drag over page text in edit mode (WPS-style) opens the editor with exactly the
-      dragged characters selected: typing replaces just them, a swatch colors just them.
-      Runs off the click that follows the drag's mouseup; returns true when consumed. */
-  const dragEditFromSelection = (origIdx: number, e: ReactMouseEvent<HTMLDivElement>): boolean => {
-    const sel = window.getSelection()
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return false
-    const range = sel.getRangeAt(0)
-    const layer = e.currentTarget.querySelector('.textLayer')
-    if (!layer) return false
-    const spanOf = (node: Node): HTMLElement | null => {
-      const el = node instanceof Element ? node : node.parentElement
-      const span = el?.closest('.textLayer span')
-      return span instanceof HTMLElement && layer.contains(span) ? span : null
-    }
-    const offsetIn = (span: HTMLElement, node: Node, off: number) =>
-      node === span ? (off === 0 ? 0 : (span.textContent ?? '').length) : off
-    const startSpan = spanOf(range.startContainer)
-    const endSpan = spanOf(range.endContainer)
-    if (!startSpan || !endSpan) return false
-    const gs = groupLineSpans(startSpan)
-    const ge = gs.spans.includes(endSpan) ? gs : groupLineSpans(endSpan)
-    const si = gs.spans.indexOf(startSpan)
-    const ei = ge.spans.indexOf(endSpan)
-    if (si < 0 || ei < 0 || !gs.text.trim()) return false
-    const rawS = gs.starts[si]! + offsetIn(startSpan, range.startContainer, range.startOffset)
-    const rawE = ge.starts[ei]! + offsetIn(endSpan, range.endContainer, range.endOffset)
-    // The block under the drag's start (same lookup as plain clicks)
-    const pageBox = e.currentTarget.getBoundingClientRect()
-    const sr = startSpan.getBoundingClientRect()
-    const [px, py] = viewToPdf(
-      pageGeom(origIdx),
-      (sr.left + sr.width / 2 - pageBox.left) / scale,
-      (sr.top + sr.height / 2 - pageBox.top) / scale,
-    )
-    const block = pageBlocks
-      .get(origIdx)
-      ?.find((b) => px >= b.rect[0] && px <= b.rect[2] && py >= b.rect[1] && py <= b.rect[3])
-    if (block && block.lines.length > 1) {
-      const blockText = joinBlockLines(block.lines.map((l) => l.text))
-      // Cross-line drags map each endpoint through its own visual line
-      const pre =
-        gs === ge
-          ? mapLineRangeToBlock(blockText, gs.text, Math.min(rawS, rawE), Math.max(rawS, rawE))
-          : (() => {
-              const a = mapLineRangeToBlock(blockText, gs.text, rawS, gs.text.length)
-              const b = mapLineRangeToBlock(blockText, ge.text, 0, rawE)
-              return a && b
-                ? ([Math.min(a[0], b[0]), Math.max(a[1], b[1])] as [number, number])
-                : null
-            })()
-      sel.removeAllRanges()
-      startBlockEdit(origIdx, block, startSpan, pre ?? undefined)
-      return true
-    }
-    const pre: [number, number] =
-      gs === ge ? [Math.min(rawS, rawE), Math.max(rawS, rawE)] : [rawS, gs.text.length]
-    sel.removeAllRanges()
-    openLineEdit(origIdx, startSpan, pre)
-    return true
-  }
-
   /** Caret of a click on page text: the span under the point plus the click's
       code-unit offset inside its visual line. Unified selection model: a click is a
       zero-length drag, so it carries a collapsed preselect into the opened editor. */
@@ -2416,18 +2390,17 @@ export default function App() {
     return { span, group, raw: group.starts[i]! + off }
   }
 
-  /** Click on a text-layer span in edit mode → open the floating editor over that run */
-  const startTextEdit = (origIdx: number, e: ReactMouseEvent<HTMLDivElement>) => {
-    if (!readOnly && dragEditFromSelection(origIdx, e)) {
-      e.stopPropagation()
-      return
-    }
+  /** Click on page text while direct editing → open the floating editor over that
+      line/paragraph. Returns true when the click opened an editor, false when
+      nothing editable was under the pointer (the caller then falls through to
+      annotation hit-testing). */
+  const startTextEdit = (origIdx: number, e: ReactMouseEvent<HTMLDivElement>): boolean => {
     const span = (e.target as HTMLElement).closest('.textLayer span')
     const caret = caretFromPoint(e)
     // A plain click inside a multi-line clustered block edits the paragraph
     // (WPS-style); Alt+click keeps the line-level editor as the fallback for
     // clustering misfires. Single-line blocks stay on the line path.
-    if (!e.altKey && !readOnly) {
+    if (!e.altKey) {
       const blocks = pageBlocks.get(origIdx)
       if (blocks && blocks.length > 0) {
         const pageBox = e.currentTarget.getBoundingClientRect()
@@ -2443,6 +2416,7 @@ export default function App() {
         // edit/move already owns them (startBlockEdit then reopens that edit)
         if (block && (block.lines.length > 1 || pendingEditFor(origIdx, block))) {
           e.stopPropagation()
+          setSelPopup(null)
           const pre = caret
             ? (mapLineRangeToBlock(
                 joinBlockLines(block.lines.map((l) => l.text)),
@@ -2452,15 +2426,17 @@ export default function App() {
               ) ?? undefined)
             : undefined
           startBlockEdit(origIdx, block, span instanceof HTMLElement ? span : undefined, pre)
-          return
+          return true
         }
       }
     }
     const anchor = caret?.span ?? (span instanceof HTMLElement ? span : null)
-    if (!anchor) return
-    if (!(anchor.textContent ?? '').trim()) return
+    if (!anchor) return false
+    if (!(anchor.textContent ?? '').trim()) return false
     e.stopPropagation()
+    setSelPopup(null)
     openLineEdit(origIdx, anchor, caret ? [caret.raw, caret.raw] : undefined)
+    return true
   }
 
   /** Open the line-level floating editor over the visual line containing `span`.
@@ -3509,13 +3485,11 @@ export default function App() {
     kind: StaticFormFillKind,
     image: Extract<SignatureData, { kind: 'image' }>,
   ) => {
-    setEditTextMode(false)
     setTextDraft(null)
     setPendingTextInsert(null)
     setDrawTool(null)
     setPendingSign(null)
     setSignatureTarget(null)
-    setEditImageMode(false)
     setPendingStaticFill(kind)
     setImagePick(image)
   }
@@ -3642,13 +3616,35 @@ export default function App() {
     const pending = pendingTextInsert
     if (!pending) return
     const geom = pageGeom(origIdx)
+    // Inherit the font size of the text nearest the click point (Sejda-style):
+    // closest line center wins, with a horizontal-distance penalty; beyond a
+    // sane radius the insert keeps its own default size.
+    const [px, py] = viewToPdf(geom, vx, vy)
+    let size = pending.fontSize
+    let nearest = Infinity
+    for (const b of pageBlocks.get(origIdx) ?? [])
+      for (const l of b.lines) {
+        const cy = (l.rect[1] + l.rect[3]) / 2
+        const dx = Math.max(l.rect[0] - px, px - l.rect[2], 0)
+        const d = Math.abs(cy - py) + dx * 0.5
+        if (d < nearest) {
+          nearest = d
+          size = l.fontSize
+        }
+      }
+    if (nearest > 100) size = pending.fontSize
+    size = Math.round(size * 2) / 2
+    insertFontSizeRef.current = size
+    const id = newId()
     pushUndo()
     setTextInserts((prev) => [
       ...prev,
       {
-        id: newId(),
+        id,
         input: {
           ...pending,
+          fontSize: size,
+          lineLeading: size * 1.2,
           pageIndex: origIdx,
           origin: viewToPdf(geom, vx, vy),
           rotate: ((geom.rot % 360) + 360) % 360,
@@ -3657,11 +3653,51 @@ export default function App() {
     ])
     setPendingTextInsert(null)
     setTextInsertPointer(null)
+    // Click-to-type: the inline input opens over the fresh insert immediately
+    setInsertDraftId(id)
+  }
+
+  /** Commit the inline insert input: close it, keep the insert selected with its
+      property bar. Runs the same embeddable-font check the old dialog did — at
+      commit time, keeping the typed text rather than blocking the input. */
+  const commitInsertDraft = (insert: LocalTextInsert) => {
+    setInsertDraftId(null)
+    setSelected(null)
+    const text = insert.input.text.trim()
+    if (!text) return
+    void window.pdfApi
+      .canDrawText(insert.input.text)
+      .then((drawable) => {
+        if (!drawable) showNotice(t('textInsertNoFont'))
+      })
+      .catch(() => {
+        /* save path re-checks anyway */
+      })
+  }
+
+  /** Patch a pending insert (property bar edits); size changes keep leading in sync */
+  const updateTextInsert = (id: string, patch: Partial<TextInsertInput>) => {
+    setTextInserts((prev) =>
+      prev.map((it) =>
+        it.id === id
+          ? {
+              ...it,
+              input: {
+                ...it.input,
+                ...patch,
+                ...(patch.fontSize !== undefined
+                  ? { lineLeading: patch.fontSize * 1.2 }
+                  : {}),
+              },
+            }
+          : it,
+      ),
+    )
+    if (patch.fontSize !== undefined) insertFontSizeRef.current = patch.fontSize
   }
 
   /** Ribbon button → file picker; the picked image then enters click-to-place mode */
   const pickInsertImage = () => {
-    setEditTextMode(false)
     setTextDraft(null)
     setPendingTextInsert(null)
     setDrawTool(null)
@@ -3687,7 +3723,7 @@ export default function App() {
   }
 
   /** Drop the picked image centered on the click point, into the text-below band by default */
-  const placeImage = (origIdx: number, vx: number, vy: number) => {
+  const placeImage = (origIdx: number, vx: number, vy: number, client?: [number, number]) => {
     const pick = imagePick
     if (!pick) return
     const geom = pageGeom(origIdx)
@@ -3742,6 +3778,11 @@ export default function App() {
     ])
     setImagePick(null)
     setPendingStaticFill(null)
+    // Fresh insert is selected immediately (handles + image toolbar), Sejda-style;
+    // static form fills keep their own completion flow without the popup
+    if (client && !staticFill) {
+      setSelected({ kind: 'imageEdit', id, ...popupPos(client[0], client[1]) })
+    }
   }
 
   /** Committed move/resize of a pending image op */
@@ -5242,8 +5283,6 @@ export default function App() {
         else if (textDraft) setTextDraft(null)
         else if (pendingTextInsert) setPendingTextInsert(null)
         else if (imagePick) setImagePick(null)
-        else if (editTextMode) setEditTextMode(false)
-        else if (editImageMode) setEditImageMode(false)
         else if (pendingSign) setPendingSign(null)
         else if (noteDraft) setNoteDraft(null)
         else if (activeNote) setActiveNote(null)
@@ -5512,28 +5551,6 @@ export default function App() {
     </button>
   )
 
-  const editTextBtn = (
-    <button
-      className={`rb-big${editTextMode ? ' active' : ''}`}
-      disabled={readOnly}
-      data-tip={t('editTextHint')}
-      onClick={() => {
-        setTextDraft(null)
-        setPendingTextInsert(null)
-        setDrawTool(null)
-        setPendingSign(null)
-        setImagePick(null)
-        setEditImageMode(false)
-        setEditTextMode((v) => !v)
-      }}
-    >
-      <span className="rb-big-icon">
-        <IconEditText />
-      </span>
-      {t('editText')}
-    </button>
-  )
-
   const insertTextBtn = (
     <button
       className={`rb-big${pendingTextInsert ? ' active' : ''}`}
@@ -5544,18 +5561,24 @@ export default function App() {
           setPendingTextInsert(null)
           return
         }
-        setEditTextMode(false)
         setTextDraft(null)
         setDrawTool(null)
         setPendingSign(null)
         setSignatureTarget(null)
         setImagePick(null)
         setPendingStaticFill(null)
-        setEditImageMode(false)
-        setTextInsertEditId(null)
-        setStaticTextPurpose('insert')
-        setStaticText('')
-        setStaticTextDialog(true)
+        // Click-to-type (Sejda-style): arm placement immediately — no settings
+        // dialog. The font size is inherited from the text nearest the click
+        // point; font/size/color are adjustable afterwards on the floating
+        // property bar of the placed insert.
+        const size = insertFontSizeRef.current
+        setPendingTextInsert({
+          text: '',
+          fontSize: size,
+          color: [0, 0, 0],
+          lineLeading: size * 1.2,
+          align: 'left',
+        })
       }}
     >
       <span className="rb-big-icon">
@@ -5572,12 +5595,10 @@ export default function App() {
     formWidgets.find((widget) => widget.kind === 'signature' && !formWidgetSigned(widget)) ?? null
 
   const openSignatureDialog = (target: FormWidget | null) => {
-    setEditTextMode(false)
     setTextDraft(null)
     setPendingTextInsert(null)
     setDrawTool(null)
     setImagePick(null)
-    setEditImageMode(false)
     setPendingSign(null)
     setSignatureTarget(target)
     if (target) focusFormWidget(target)
@@ -5767,10 +5788,7 @@ export default function App() {
               <div className="ribbon-sep" />
               {/* Edit entries lead; Search moved after page/zoom (⌘F is the common path) */}
               <div className="ribbon-group">
-                <div className="ribbon-group-items">
-                  {editTextBtn}
-                  {insertTextBtn}
-                </div>
+                <div className="ribbon-group-items">{insertTextBtn}</div>
               </div>
               <div className="ribbon-sep" />
               <div className="ribbon-group">
@@ -5885,11 +5903,9 @@ export default function App() {
                       disabled={readOnly}
                       data-tip={t(key)}
                       onClick={() => {
-                        setEditTextMode(false)
                         setTextDraft(null)
                         setPendingTextInsert(null)
                         setImagePick(null)
-                        setEditImageMode(false)
                         setDrawTool((v) => (v === tool ? null : tool))
                       }}
                     >
@@ -5949,7 +5965,6 @@ export default function App() {
             <>
               <div className="ribbon-group">
                 <div className="ribbon-group-items">
-                  {editTextBtn}
                   {insertTextBtn}
                   <button
                     className={`rb-big${imagePick && !pendingStaticFill ? ' active' : ''}`}
@@ -5961,25 +5976,6 @@ export default function App() {
                       <IconInsertImage />
                     </span>
                     {t('insertImage')}
-                  </button>
-                  <button
-                    className={`rb-big${editImageMode ? ' active' : ''}`}
-                    disabled={readOnly}
-                    data-tip={t('editImageHint')}
-                    onClick={() => {
-                      setEditTextMode(false)
-                      setTextDraft(null)
-                      setDrawTool(null)
-                      setPendingSign(null)
-                      setImagePick(null)
-                      setPendingTextInsert(null)
-                      setEditImageMode((v) => !v)
-                    }}
-                  >
-                    <span className="rb-big-icon">
-                      <IconEditImage />
-                    </span>
-                    {t('editImage')}
                   </button>
                 </div>
               </div>
@@ -6565,7 +6561,9 @@ export default function App() {
                       return (
                         <div
                           key={origIdx}
-                          className={`pdf-page${editTextMode && !readOnly ? ' pdf-editing-text' : ''}${
+                          className={`pdf-page${
+                            !readOnly ? ' pdf-can-edit' : ''
+                          }${textDraft?.origIdx === origIdx ? ' pdf-editing-text' : ''}${
                             pendingTextInsert ? ' pdf-inserting-text' : ''
                           }`}
                           style={
@@ -6584,10 +6582,12 @@ export default function App() {
                                 (e.clientX - pageBox.left) / scale,
                                 (e.clientY - pageBox.top) / scale,
                               )
-                            } else if (editTextMode && !readOnly) startTextEdit(origIdx, e)
-                            else handlePageClick(origIdx, e)
+                            } else if (directEdit && startTextEdit(origIdx, e)) {
+                              // click-to-edit consumed it
+                            } else handlePageClick(origIdx, e)
                           }}
                           onMouseMove={(e) => {
+                            setPagePointerSeen(true)
                             if (pendingTextInsert && !readOnly) {
                               const pageBox = e.currentTarget.getBoundingClientRect()
                               setTextInsertPointer({
@@ -6595,7 +6595,7 @@ export default function App() {
                                 x: (e.clientX - pageBox.left) / scale,
                                 y: (e.clientY - pageBox.top) / scale,
                               })
-                            } else if (editTextMode && !readOnly) {
+                            } else if (directEdit) {
                               // move, not over: leaving the hover box across the static textLayer
                               // background fires no over events; updateLineHover cheaply returns
                               // while the anchor span is unchanged.
@@ -6606,10 +6606,8 @@ export default function App() {
                             setTextInsertPointer((pointer) =>
                               pointer?.pageIndex === origIdx ? null : pointer,
                             )
-                            if (editTextMode && !readOnly) {
-                              clearLineHover()
-                              clearBlockHover()
-                            }
+                            clearLineHover()
+                            clearBlockHover()
                           }}
                         >
                           <PdfPage
@@ -6658,17 +6656,19 @@ export default function App() {
                               title={
                                 pendingStaticFill ? t('formPlaceStaticHint') : t('imagePlaceHint')
                               }
-                              onPlace={(vx, vy) => placeImage(origIdx, vx, vy)}
+                              onPlace={(vx, vy, client) => placeImage(origIdx, vx, vy, client)}
                               placeK={pendingStaticFill ? staticFormFillPlaceK : imagePlaceK}
                             />
                           )}
-                          {/* Paragraph boxes (WPS-style): every text block outlined while
-                            edit-text mode is on; hovered one highlighted, all dimmed
-                            while the floating editor is open. The hovered block grows
-                            border grips — dragging them moves the whole block. */}
-                          {editTextMode &&
-                            !readOnly &&
+                          {/* Paragraph boxes (WPS-style) under direct editing: the
+                            hovered block is outlined with move grips, and while the
+                            floating editor is open every block on that page shows
+                            dimmed for context. Dragging the grips moves the block. */}
+                          {!readOnly &&
                             rowVisible &&
+                            (blockHover?.origIdx === origIdx ||
+                              blockDrag?.origIdx === origIdx ||
+                              textDraft?.origIdx === origIdx) &&
                             (pageBlocks.get(origIdx) ?? []).map((b, i) => {
                               const drawRect = blockDrawRect(origIdx, b)
                               const box = pdfRectToCss(geom, drawRect, scale)
@@ -6792,7 +6792,7 @@ export default function App() {
                                 </Fragment>
                               )
                             })}
-                          {editTextMode && !readOnly && lineHover?.origIdx === origIdx && (
+                          {directEdit && lineHover?.origIdx === origIdx && (
                             <div className="pdf-textline-hover" style={lineHover.box} />
                           )}
                           {rowVisible && (
@@ -6831,6 +6831,67 @@ export default function App() {
                                     style.transform = `translate(${insertDrag.to[0] - insertDrag.from[0]}px, ${
                                       insertDrag.to[1] - insertDrag.from[1]
                                     }px)${style.transform ? ` ${style.transform}` : ''}`
+                                  }
+                                  if (insertDraftId === insert.id) {
+                                    // Click-to-type input: styles itself like the
+                                    // placed insert; typing patches it live (one
+                                    // undo step per insert, like the old dialog)
+                                    const lines = insert.input.text.split('\n')
+                                    const taFont = `${insert.input.italic ? 'italic ' : ''}${
+                                      insert.input.bold ? '700 ' : ''
+                                    }${style.fontSize ?? 12}px ${
+                                      style.fontFamily ?? getComputedStyle(document.body).fontFamily
+                                    }`
+                                    const longest = Math.max(
+                                      80,
+                                      ...lines.map((l) => measureTextWidth(l || ' ', taFont) + 14),
+                                    )
+                                    return (
+                                      <textarea
+                                        key={insert.id}
+                                        className="pdf-textinsert-input"
+                                        style={{
+                                          ...style,
+                                          width: Math.min(
+                                            longest,
+                                            geomDispSize(geom).width * scale -
+                                              (style.left as number) -
+                                              8,
+                                          ),
+                                          transform: undefined,
+                                        }}
+                                        rows={Math.max(1, lines.length)}
+                                        wrap="off"
+                                        value={insert.input.text}
+                                        ref={(el) => {
+                                          if (el) {
+                                            el.focus()
+                                            const n = el.value.length
+                                            try {
+                                              el.setSelectionRange(n, n)
+                                            } catch {
+                                              /* type=textarea always supports it */
+                                            }
+                                          }
+                                        }}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) =>
+                                          updateTextInsert(insert.id, { text: e.target.value })
+                                        }
+                                        onKeyDown={(e) => {
+                                          e.stopPropagation()
+                                          if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault()
+                                            commitInsertDraft(insert)
+                                          } else if (e.key === 'Escape') {
+                                            e.preventDefault()
+                                            commitInsertDraft(insert)
+                                          }
+                                        }}
+                                        onBlur={() => commitInsertDraft(insert)}
+                                      />
+                                    )
                                   }
                                   return (
                                     <div
@@ -6903,15 +6964,9 @@ export default function App() {
                                       }}
                                       onDoubleClick={(e) => {
                                         e.stopPropagation()
+                                        // Inline re-edit (was: settings dialog)
                                         setSelected(null)
-                                        setPendingTextInsert(null)
-                                        setTextInsertEditId(insert.id)
-                                        setStaticTextPurpose('insert')
-                                        setStaticText(insert.input.text)
-                                        setStaticTextSize(insert.input.fontSize)
-                                        setStaticTextColor(rgb255ToHex(insert.input.color))
-                                        setStaticTextAlign(insert.input.align ?? 'left')
-                                        setStaticTextDialog(true)
+                                        setInsertDraftId(insert.id)
                                       }}
                                     >
                                       {insert.input.text}
@@ -6965,12 +7020,10 @@ export default function App() {
                                             : ''
                                         }`}
                                         style={style}
-                                        data-tip={
-                                          editTextMode ? t('editTextHint') : t('removeMarkup')
-                                        }
+                                        data-tip={directEdit ? t('editTextHint') : t('removeMarkup')}
                                         onClick={(e) => {
                                           e.stopPropagation()
-                                          if (editTextMode && !readOnly) {
+                                          if (directEdit) {
                                             draftSelectedRef.current = false
                                             // A line edit inside a multi-line clustered
                                             // paragraph reopens the whole paragraph with the
@@ -7396,11 +7449,11 @@ export default function App() {
                                   savedStaticFormFills.some(
                                     (record) => record.pageIndex === origIdx,
                                   )) ||
-                                (editImageMode &&
+                                (!readOnly &&
                                   pageImages.some((ref) => ref.pageIndex === origIdx))) && (
                                 <div
                                   className={
-                                    editTextMode || drawTool || pendingSign || imagePick
+                                    drawTool || pendingSign || imagePick || pendingTextInsert
                                       ? 'pdf-imgedit-passive'
                                       : undefined
                                   }
@@ -7412,7 +7465,7 @@ export default function App() {
                                       (ie) => ie.input.pageIndex === origIdx,
                                     )}
                                     existing={[
-                                      ...(editImageMode
+                                      ...(!readOnly
                                         ? pageImages.filter((ref) => ref.pageIndex === origIdx)
                                         : []),
                                       ...(ribbonTab === 'fillForm'
@@ -7811,6 +7864,91 @@ export default function App() {
                     <span className="pdf-del-popup-sep" />
                   </>
                 )}
+                {selected.kind === 'textInsert' &&
+                  (() => {
+                    // Click-to-type insert property bar (Sejda-style): edit text,
+                    // font, size, color — here, after placing, not in a dialog
+                    const insert = textInserts.find((i) => i.id === selected.id)
+                    if (!insert) return null
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          data-tip={t('formEditText')}
+                          aria-label={t('formEditText')}
+                          onClick={() => {
+                            setInsertDraftId(insert.id)
+                            setSelected(null)
+                          }}
+                        >
+                          <IconFormText />
+                        </button>
+                        <span className="pdf-del-popup-sep" />
+                        {editFonts.length > 0 && (
+                          <Dropdown
+                            className="pdf-textedit-fontsel"
+                            tip={t('texteditFont')}
+                            ariaLabel={t('texteditFont')}
+                            value={insert.input.font ?? ''}
+                            options={[
+                              { value: '', label: t('texteditFontOriginal') },
+                              ...editFonts.map((id) => ({
+                                value: id,
+                                label: EDIT_FONT_BY_ID.get(id)?.label ?? id,
+                              })),
+                            ]}
+                            onPick={(v) => {
+                              pushUndo()
+                              updateTextInsert(insert.id, { font: v || undefined })
+                            }}
+                          />
+                        )}
+                        <input
+                          className="pdf-textedit-sizenum"
+                          type="number"
+                          min={4}
+                          max={200}
+                          data-tip={t('watermarkSize')}
+                          aria-label={t('watermarkSize')}
+                          value={insert.input.fontSize}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const v = Number(e.target.value)
+                            if (!Number.isFinite(v) || v < 4 || v > 200) return
+                            pushUndo(`insertSize:${insert.id}`)
+                            updateTextInsert(insert.id, { fontSize: v })
+                          }}
+                        />
+                        <span className="rb-drop-wrap pdf-insert-color-wrap">
+                          <button
+                            type="button"
+                            className="pdf-textinsert-color-btn"
+                            data-tip={t('drawColor')}
+                            aria-label={t('drawColor')}
+                            onClick={() => setInsertColorOpen((v) => !v)}
+                          >
+                            <span
+                              className="rb-color-bar"
+                              style={{ background: cssRgb(insert.input.color) }}
+                            />
+                          </button>
+                          {insertColorOpen && (
+                            <ColorPickerPopover
+                              className="rb-drop"
+                              value={rgb255ToHex(insert.input.color)}
+                              onPick={(hex) => {
+                                setInsertColorOpen(false)
+                                pushUndo()
+                                updateTextInsert(insert.id, { color: hexTo255(hex) })
+                              }}
+                              onClose={() => setInsertColorOpen(false)}
+                            />
+                          )}
+                        </span>
+                        <span className="pdf-del-popup-sep" />
+                      </>
+                    )
+                  })()}
                 {selectedImageLayer() !== null && (
                   <>
                     <button

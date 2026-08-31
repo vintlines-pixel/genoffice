@@ -1874,6 +1874,41 @@ button {
   cursor: text;
 }
 
+/* Inline click-to-type input over a freshly placed text insert; styled like the
+   text-edit input but sized by its own text (grows with the longest line) */
+.pdf-textinsert-input {
+  position: absolute;
+  z-index: 6;
+  min-width: 80px;
+  padding: 0 2px;
+  border: 1px solid var(--pdf-textedit-ring);
+  border-radius: 2px;
+  background: var(--pdf-textedit-paper);
+  color: var(--pdf-textedit-ink);
+  line-height: 1.2;
+  box-sizing: content-box;
+  white-space: pre;
+  overflow: hidden;
+  resize: none;
+}
+
+/* Swatch button on the insert property bar (selection popup) */
+.pdf-textinsert-color-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text);
+}
+.pdf-textinsert-color-btn:hover {
+  background: var(--hover);
+}
+
 .pdf-textedit-input {
   position: absolute;
   z-index: 6;
@@ -1886,6 +1921,13 @@ button {
   font-family: inherit;
   box-sizing: content-box;
   min-width: 60px;
+}
+
+/* Direct editing (Sejda-style): an editable page invites clicking text to edit
+   it — the text cursor over spans is that affordance. Unlike pdf-editing-text
+   (active only while a draft editor is open), this never touches link overlays. */
+.pdf-can-edit .textLayer span:hover {
+  cursor: text;
 }
 
 .pdf-editing-text .textLayer span:hover {

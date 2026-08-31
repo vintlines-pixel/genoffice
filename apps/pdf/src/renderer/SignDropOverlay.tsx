@@ -33,7 +33,7 @@ export function SignDropOverlay({
   scale: number
   color: [number, number, number]
   title: string
-  onPlace: (vx: number, vy: number) => void
+  onPlace: (vx: number, vy: number, client?: [number, number]) => void
   /** Landing-size rule; defaults to signature sizing (image insert passes its own) */
   placeK?: (sig: SignatureData, dispW: number, dispH: number) => number
 }): ReactElement {
@@ -51,8 +51,16 @@ export function SignDropOverlay({
       }}
       onPointerLeave={() => setPt(null)}
       onClick={(e) => {
+        // The placement consumes the click: without this, the bubbled event
+        // reaches the page/scroll handlers, which would clear the just-set
+        // selection of the placed image (and could open a text editor when
+        // the placement happens over existing text)
+        e.stopPropagation()
         const box = e.currentTarget.getBoundingClientRect()
-        onPlace((e.clientX - box.left) / scale, (e.clientY - box.top) / scale)
+        onPlace((e.clientX - box.left) / scale, (e.clientY - box.top) / scale, [
+          e.clientX,
+          e.clientY,
+        ])
       }}
     >
       {pt && (
