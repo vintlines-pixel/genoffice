@@ -61,6 +61,18 @@ export function SaveAsIcon(): ReactElement {
   )
 }
 
+/// Export to PDF quick-access button: a document with a download arrow overlay
+/// (same document silhouette as the Save/Save As glyphs).
+export function ExportPdfIcon(): ReactElement {
+  return (
+    <Icon>
+      <path d="M13.37 4.49H7.68c-.76 0-1.36.61-1.36 1.37v12.29c0 .76.61 1.37 1.37 1.37h8.65c.76 0 1.37-.61 1.37-1.36V8.82L13.37 4.49Z" />
+      <path d="M13.37 4.49V8.82h4.32" />
+      <path d="M12 10v5.25M9.5 12.75 12 15.25l2.5-2.5" />
+    </Icon>
+  )
+}
+
 /// Quick-access undo/redo — design-supplied geometry shared with the docs
 /// and slides ribbons, so the three apps' tab-row arrows read identically.
 export function UndoIcon(): ReactElement {

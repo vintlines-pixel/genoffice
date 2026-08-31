@@ -390,11 +390,13 @@ function refreshMergeCount(xml: string): string {
 }
 
 /// Rewrites references to the edited sheet inside another sheet's formulas
-/// (only tokens qualified with the edited sheet's name shift).
+/// (only tokens qualified with the edited sheet's name shift). `formulaSheetName`
+/// names the sheet whose XML is being rewritten, so an abort can point at it.
 export function shiftCrossSheetFormulas(
   otherWorksheetXml: string,
   editedSheetName: string,
   ops: readonly StructuralOp[],
+  formulaSheetName?: string,
 ): string {
   let xml = otherWorksheetXml
   for (const op of rowColumnOps(ops)) {
@@ -407,7 +409,14 @@ export function shiftCrossSheetFormulas(
       /<f\b([^>]*[^/>])?>([\s\S]*?)<\/f>/g,
       (_full, attributes: string | undefined, body: string) =>
         `<f${attributes ?? ''}>${escapeXmlText(
-          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true),
+          shiftFormulaText(
+            decodeEntities(body),
+            editedSheetName,
+            shift,
+            axis,
+            true,
+            formulaSheetName === undefined ? 'another sheet' : `sheet "${formulaSheetName}"`,
+          ),
         )}</f>`,
     )
   }
@@ -428,7 +437,7 @@ export function shiftDefinedNames(
       /(<definedName\b[^>]*>)([\s\S]*?)(<\/definedName>)/g,
       (_full, open: string, body: string, close: string) =>
         `${open}${escapeXmlText(
-          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true),
+          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true, 'a defined name'),
         )}${close}`,
     )
   }
@@ -449,7 +458,7 @@ export function shiftChartReferences(
       /(<c:f>)([\s\S]*?)(<\/c:f>)/g,
       (_full, open: string, body: string, close: string) =>
         `${open}${escapeXmlText(
-          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true),
+          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true, 'a chart'),
         )}${close}`,
     )
   }
@@ -1018,7 +1027,7 @@ function transformFormulas(xml: string, sheetName: string, shift: Shift, axis: A
     (_full, rawAttributes: string | undefined, body: string) => {
       const attributes = rawAttributes ?? ''
       const rewritten = escapeXmlText(
-        shiftFormulaText(decodeEntities(body), sheetName, shift, axis),
+        shiftFormulaText(decodeEntities(body), sheetName, shift, axis, false, `sheet "${sheetName}"`),
       )
       const newAttributes = attributes.replace(
         /(\bref=")([^"]*)(")/,
@@ -1042,7 +1051,7 @@ function transformFormulas(xml: string, sheetName: string, shift: Shift, axis: A
   result = result.replace(
     /<(formula[12]?)>([\s\S]*?)<\/\1>/g,
     (_full, tag: string, body: string) =>
-      `<${tag}>${escapeXmlText(shiftFormulaText(decodeEntities(body), sheetName, shift, axis))}</${tag}>`,
+      `<${tag}>${escapeXmlText(shiftFormulaText(decodeEntities(body), sheetName, shift, axis, false, `sheet "${sheetName}"`))}</${tag}>`,
   )
   return result
 }
@@ -1159,13 +1168,16 @@ export const FORMULA_REFERENCE_PATTERN = new RegExp(
 /// sheets' qualified references. String literals are left untouched. A
 /// reference fully inside a deleted range aborts (Excel would emit #REF!).
 /// With qualifiedOnly, only references explicitly qualified with sheetName
-/// shift — the mode for rewriting OTHER sheets' formulas.
+/// shift — the mode for rewriting OTHER sheets' formulas. `context` names
+/// where the formula lives (sheet name, "a defined name", "a chart") so the
+/// abort error tells the user which formula to fix.
 export function shiftFormulaText(
   formula: string,
   sheetName: string,
   shift: Shift,
   axis: Axis,
   qualifiedOnly = false,
+  context = 'a formula',
 ): string {
   // Formula string literals use "" escaping, so splitting on `"` leaves
   // literal content in the odd-indexed segments.
@@ -1174,7 +1186,7 @@ export function shiftFormulaText(
     .map((segment, index) =>
       index % 2 === 1
         ? segment
-        : shiftFormulaSegment(segment, sheetName, shift, axis, qualifiedOnly),
+        : shiftFormulaSegment(segment, sheetName, shift, axis, qualifiedOnly, context),
     )
     .join('"')
 }
@@ -1185,6 +1197,7 @@ function shiftFormulaSegment(
   shift: Shift,
   axis: Axis,
   qualifiedOnly: boolean,
+  context: string,
 ): string {
   return segment.replace(
     FORMULA_REFERENCE_PATTERN,
@@ -1194,7 +1207,7 @@ function shiftFormulaSegment(
       const shifted = shiftReferenceToken(token, shift, axis)
       if (shifted === null) {
         throw new StructuralShiftError(
-          `A formula references the deleted range (${token}) — deletion aborted.`,
+          `A formula in ${context} references the deleted range (${token}) — deletion aborted.`,
         )
       }
       return `${lead}${qualifier === undefined ? '' : `${qualifier}!`}${shifted}`

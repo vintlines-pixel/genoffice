@@ -620,7 +620,12 @@ export function App(): React.JSX.Element {
     column: number
     viewRow: number
     viewColumn: number
+    zoom: number
   } | null>(null)
+  /// Suppresses journal recording for programmatic zoom application (file
+  /// seeding on load / post-save view restore) — those must not re-dirty the
+  /// workbook the moment it opens or saves.
+  const suppressZoomJournalRef = useRef(false)
   /// Fresh handleSave for the AutoSave tick (assigned each render, like
   /// menuActionRef, so the interval closure never goes stale).
   const handleSaveRef = useRef<
@@ -1627,7 +1632,16 @@ export function App(): React.JSX.Element {
       runtime.univerAPI.Event.SheetZoomChanged,
       ({ worksheet }) => {
         setAiSelectionAskAnchor(null)
-        setZoomPercent(Math.round(worksheet.getZoom() * 100))
+        const percent = Math.round(worksheet.getZoom() * 100)
+        setZoomPercent(percent)
+        if (suppressZoomJournalRef.current) return
+        // Persist the sheet zoom (sheetView/@zoomScale) like the other
+        // sheetView display attributes.
+        const state = lazyWorkbookRef.current
+        if (state) {
+          recordPageSetup(state.editJournal, worksheet.getSheetId(), { zoomScale: percent })
+          setPendingEdits(journalSize(state.editJournal))
+        }
       },
     )
     // In-cell editor open/closed, read by the AutoSave tick: saving reloads
@@ -4253,6 +4267,17 @@ export function App(): React.JSX.Element {
             // scroll to the captured viewport origin — not the selection —
             // to reproduce the exact pre-save view.
             restoredSheet.scrollToCell(restore.viewRow, restore.viewColumn)
+            // Zoom lives on the sheet view and the reinstall resets it to
+            // 100% — restore the magnification the user was at. Programmatic:
+            // suppressing journal recording keeps the post-save file clean.
+            if (restore.zoom && restore.zoom !== restoredSheet.getZoom()) {
+              suppressZoomJournalRef.current = true
+              try {
+                restoredSheet.zoom(restore.zoom)
+              } finally {
+                suppressZoomJournalRef.current = false
+              }
+            }
           } else {
             worksheet.scrollToCell(0, 0)
           }
@@ -4263,6 +4288,35 @@ export function App(): React.JSX.Element {
           // QuantityCheckError. The fresh view is already at the origin, so
           // skipping the reset is harmless.
         }
+        // Seed per-sheet zoom from the file (sheetView/@zoomScale); the default
+        // is 100%, so only non-default values need applying. The facade zoom()
+        // routes through SetZoomRatioOperation, which is a no-op until the
+        // sheet's render unit exists — so retry until every sheet reports the
+        // target (bounded). Programmatic: journal recording stays suppressed.
+        const seedZoom = (attempt: number): void => {
+          if (lazyWorkbookRef.current !== state) return
+          const wb = runtime.univerAPI.getActiveWorkbook()
+          if (!wb) return
+          let pending = false
+          for (const sheet of selected.sheets) {
+            if (sheet.zoomScale === undefined || sheet.zoomScale === 100) continue
+            const ws = wb.getSheetBySheetId(sheet.id)
+            if (!ws) continue
+            if (Math.abs(ws.getZoom() - sheet.zoomScale / 100) > 0.005) {
+              pending = true
+              suppressZoomJournalRef.current = true
+              try {
+                ws.zoom(sheet.zoomScale / 100)
+              } catch {
+                /* best-effort */
+              } finally {
+                suppressZoomJournalRef.current = false
+              }
+            }
+          }
+          if (pending && attempt < 20) setTimeout(() => seedZoom(attempt + 1), 50)
+        }
+        setTimeout(() => seedZoom(0), 0)
         // getVisibleRange lags the jump by a frame (same as name-box goto) —
         // anchor the first stream at the restored cell, not the stale origin.
         void loadVisibleRange(

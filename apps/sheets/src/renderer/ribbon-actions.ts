@@ -1272,9 +1272,11 @@ export function handleRibbonCommand(ctx: RibbonCommandContext, command: string):
         if (argument === 'unmerge') {
           range.breakApart()
         } else if (argument === 'across') {
-          range.mergeAcross()
+          // isForceMerge: re-merging a selection that already contains merged
+          // cells first clears those merges, then merges across (Excel parity).
+          range.mergeAcross({ isForceMerge: true })
         } else {
-          range.merge()
+          range.merge({ isForceMerge: true })
           if (argument === 'center') range.setHorizontalAlignment('center')
         }
         break

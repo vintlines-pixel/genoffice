@@ -76,6 +76,19 @@ describe('applyStructuralOps rows', () => {
     ).toThrow(StructuralShiftError)
   })
 
+  it('names the sheet in the abort error so the user can find the formula', () => {
+    expect(() =>
+      shiftFormulaText(
+        'I13*2',
+        'Sheet2',
+        { boundary: 8, delta: -1, deleted: { start: 8, end: 8 } },
+        'column',
+        false,
+        'sheet "Sheet2"',
+      ),
+    ).toThrow('sheet "Sheet2" references the deleted range (I13)')
+  })
+
   it('clamps a range formula that straddles the deleted rows', () => {
     const shifted = shiftFormulaText(
       'SUM(A1:A10)',

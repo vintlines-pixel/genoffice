@@ -77,6 +77,8 @@ const worksheetMetadataSchema = z
     showRowColHeaders: z.boolean().optional(),
     /// sheetView/@rightToLeft — the grid is mirrored (column A at the right).
     rightToLeft: z.boolean().optional(),
+    /// sheetView/@zoomScale — the sheet's view zoom percent (10-400); absent = 100%.
+    zoomScale: z.number().int().min(10).max(400).optional(),
     tables: z.array(
       z
         .object({
@@ -1137,6 +1139,8 @@ export const workbookPageSetupStateSchema = z
     showGridlines: z.boolean().optional(),
     showFormulas: z.boolean().optional(),
     showHeadings: z.boolean().optional(),
+    /// sheetView/@zoomScale — view zoom percent (10-400); 100 clears the attr.
+    zoomScale: z.number().int().min(10).max(400).optional(),
     printArea: z.union([z.string().min(1).max(255), z.null()]).optional(),
     printTitles: z.union([z.string().regex(/^\d{1,7}:\d{1,7}$/), z.null()]).optional(),
     /// Frozen pane counts; both present together, 0/0 removes the pane.

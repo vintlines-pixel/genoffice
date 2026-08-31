@@ -115,6 +115,9 @@ pub struct SheetMetadata {
     pub show_row_col_headers: bool,
     /// sheetView/@rightToLeft: the grid is mirrored (column A at the right).
     pub right_to_left: bool,
+    /// sheetView/@zoomScale: the sheet's view zoom percent (10-400); absent = 100%.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zoom_scale: Option<u16>,
     pub tables: Vec<TableInfo>,
     pub comments: Vec<CommentInfo>,
     /// PivotTable output areas — protected from edits by the renderer.
@@ -777,6 +780,7 @@ impl WorkbookSessions {
                 show_formulas: dimensions.show_formulas,
                 show_row_col_headers: dimensions.show_row_col_headers,
                 right_to_left: dimensions.right_to_left,
+                zoom_scale: dimensions.zoom_scale,
                 tables,
                 comments,
                 pivot_ranges,
@@ -1409,6 +1413,7 @@ struct SheetDimensions {
     show_formulas: bool,
     show_row_col_headers: bool,
     right_to_left: bool,
+    zoom_scale: Option<u16>,
 }
 
 fn read_sheet_dimensions(
@@ -1437,6 +1442,7 @@ fn read_sheet_dimensions(
     let mut show_formulas = false;
     let mut show_row_col_headers = true;
     let mut right_to_left = false;
+    let mut zoom_scale = None;
     loop {
         match reader.read_event_into(&mut buffer)? {
             Event::Start(element) | Event::Empty(element)
@@ -1472,6 +1478,9 @@ fn read_sheet_dimensions(
                 }
                 if let Some(value) = attribute_value(&reader, &element, b"rightToLeft")? {
                     right_to_left = value == "1" || value == "true";
+                }
+                if let Some(value) = attribute_value(&reader, &element, b"zoomScale")? {
+                    zoom_scale = value.parse::<u16>().ok().filter(|v| (10..=400).contains(v));
                 }
             }
             Event::Start(element) | Event::Empty(element)
@@ -1578,6 +1587,7 @@ fn read_sheet_dimensions(
                     show_formulas,
                     show_row_col_headers,
                     right_to_left,
+                    zoom_scale,
                 });
             }
             Event::Start(element) | Event::Empty(element)
@@ -1623,6 +1633,7 @@ fn read_sheet_dimensions(
                     show_formulas,
                     show_row_col_headers,
                     right_to_left,
+                    zoom_scale,
                 });
             }
             _ => {}
@@ -4008,6 +4019,7 @@ mod tests {
             show_formulas: false,
             show_row_col_headers: true,
             right_to_left: false,
+            zoom_scale: None,
             tables: Vec::new(),
             comments: Vec::new(),
             pivot_ranges: Vec::new(),
@@ -4170,6 +4182,7 @@ mod tests {
             show_formulas: false,
             show_row_col_headers: true,
             right_to_left: false,
+            zoom_scale: None,
             tables: Vec::new(),
             comments: Vec::new(),
             pivot_ranges: Vec::new(),

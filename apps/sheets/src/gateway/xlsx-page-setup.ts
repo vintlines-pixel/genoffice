@@ -30,6 +30,8 @@ export interface SheetPageSetupState {
   readonly showGridlines?: boolean | undefined
   readonly showFormulas?: boolean | undefined
   readonly showHeadings?: boolean | undefined
+  /// sheetView/@zoomScale — view zoom percent (10-400); 100 clears the attr.
+  readonly zoomScale?: number | undefined
   readonly printArea?: string | null | undefined
   readonly printTitles?: string | null | undefined
   readonly frozenRows?: number | undefined
@@ -322,6 +324,10 @@ export function applyPageSetupState(worksheetXml: string, state: SheetPageSetupS
   if (state.showHeadings !== undefined) {
     // showRowColHeaders defaults to true; write "0" to hide.
     xml = setSheetViewAttr(xml, 'showRowColHeaders', state.showHeadings ? null : '0')
+  }
+  if (state.zoomScale !== undefined) {
+    // zoomScale defaults to 100; drop the attribute to restore it.
+    xml = setSheetViewAttr(xml, 'zoomScale', state.zoomScale === 100 ? null : String(state.zoomScale))
   }
 
   const printOptions: Record<string, string | null> = {}

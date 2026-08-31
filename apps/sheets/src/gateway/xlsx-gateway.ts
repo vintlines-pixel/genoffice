@@ -821,7 +821,7 @@ export async function planCellEditsToXlsx(
           : await pkg.readText(path)
       const shifted = isChart
         ? shiftChartReferences(xml, sheetName, ops)
-        : shiftCrossSheetFormulas(xml, sheetName, ops)
+        : shiftCrossSheetFormulas(xml, sheetName, ops, trackedName)
       if (shifted === xml) continue
       if (trackedName !== undefined) {
         worksheetXmls.set(trackedName, shifted)

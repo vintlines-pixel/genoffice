@@ -4,6 +4,7 @@ import { Dropdown, SHAPE_GALLERY_GROUPS, ShapePreview, useDismissablePopover } f
 
 import {
   CaretIcon,
+  ExportPdfIcon,
   GensparkMark,
   RIBBON_GLYPH_ICONS,
   RedoIcon,
@@ -480,6 +481,15 @@ export function ExcelShell({
             onClick={onSaveAs}
           >
             <SaveAsIcon />
+          </button>
+          <button
+            type="button"
+            className="qa-btn"
+            data-tip={t('appExportPdfTitle')}
+            aria-label={t('appExportPdfTitle')}
+            onClick={() => onCommand('export-pdf')}
+          >
+            <ExportPdfIcon />
           </button>
           <button
             type="button"

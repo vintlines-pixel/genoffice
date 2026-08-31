@@ -54,6 +54,8 @@ export interface SaveContext {
       column: number
       viewRow: number
       viewColumn: number
+      /** sheet zoom as a fraction (1 = 100%), restored after the reinstall */
+      zoom: number
     } | null,
   ) => void
 }
@@ -93,6 +95,9 @@ export async function handleSave(
       column,
       viewRow: anchor?.row ?? row,
       viewColumn: anchor?.column ?? column,
+      // Saving reinstalls the workbook, which resets the view zoom to 100% —
+      // capture it so the restore lands at the same magnification.
+      zoom: sheet.getZoom() || 1,
     }
   })()
   if (!state) {
