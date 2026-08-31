@@ -15,14 +15,30 @@ import {
   hfUsesLegacyHash,
   paraBorderCss,
 } from '../editor/hf-dom'
-import { applyHfText, hfEditText, hfParasOf, PAGE_TOKEN } from '../editor/hf-text'
+import { hfParasOf, PAGE_TOKEN } from '../editor/hf-text'
+import { HF_FONT_SIZES, TOTAL_TOKEN, hfEditDomToValue, hfToEditHtml } from '../editor/hf-rich'
+import { fontFamiliesFor } from '../font-list'
 import { cssRunFontFamily, runLetterSpacingCss } from '../line-metrics'
+import {
+  IconAlignCenter,
+  IconAlignLeft,
+  IconAlignRight,
+  IconClose,
+  IconFontColorA,
+  IconPageNumber,
+} from './icons'
 
 export interface HfValue {
   text: string
   pageNumber?: boolean
   paras?: HfParagraph[]
 }
+
+/** Word standard-colors palette for the header/footer text-color popover */
+const HF_COLORS = [
+  '000000', 'FFFFFF', 'C00000', 'FF0000', 'ED7D31', 'FFC000', 'FFFF00', '00B050',
+  '0070C0', '00B0F0', '002060', '7030A0', '808080', 'C0C0C0',
+]
 
 function runStyle(run: Run): React.CSSProperties {
   const style: React.CSSProperties = {}
@@ -102,12 +118,13 @@ export function HeaderFooterArea({
   /** geometry override: on differing-width sections the strip is pinned to its own section's box */
   style?: React.CSSProperties
 }) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const [editing, setEditing] = useState(false)
   const [inserting, setInserting] = useState(false)
+  const [colorOpen, setColorOpen] = useState(false)
   const editRef = useRef<HTMLDivElement>(null)
   const cancelRef = useRef(false)
-  const initialTextRef = useRef('')
+  const initialHtmlRef = useRef('')
   const paras = hfParasOf(value)
 
   const insertImage = async () => {
@@ -145,10 +162,16 @@ export function HeaderFooterArea({
     if (!editing) return
     const el = editRef.current
     if (!el) return
-    // table-row (cells) paragraphs stay out of the text editing flow
-    el.innerText = hfEditText(value)
+    // rich editable HTML: per-run styled spans + per-paragraph alignment blocks
+    el.innerHTML = hfToEditHtml(value)
     cancelRef.current = false
-    initialTextRef.current = el.innerText
+    initialHtmlRef.current = el.innerHTML
+    // execCommand color/lists wrap the selection in CSS spans (not <font> tags)
+    try {
+      document.execCommand('styleWithCSS', false, 'true')
+    } catch {
+      /* non-fatal: foreColor then falls back to <font> */
+    }
     el.focus()
     const sel = window.getSelection()
     if (sel) {
@@ -161,14 +184,60 @@ export function HeaderFooterArea({
   const commit = () => {
     const el = editRef.current
     setEditing(false)
+    setColorOpen(false)
     if (!el) return
     if (cancelRef.current) {
       cancelRef.current = false
       return
     }
-    if (el.innerText === initialTextRef.current) return
-    onCommit(applyHfText(value, el.innerText))
+    // Compare rich HTML: a formatting-only change (e.g. bold) leaves innerText
+    // identical, so the old text-only guard would silently drop it.
+    if (el.innerHTML === initialHtmlRef.current) return
+    onCommit(hfEditDomToValue(value, el))
   }
+
+  // ── formatting toolbar actions (execCommand for the classic toggles; span
+  //    wrap for font size/family, which execCommand maps to 1-7 / <font>) ──
+
+  const focusEdit = () => editRef.current?.focus()
+
+  const exec = (cmd: string, val?: string): void => {
+    focusEdit()
+    try {
+      document.execCommand(cmd, false, val)
+    } catch {
+      /* ignored */
+    }
+  }
+
+  /** wrap the current selection in a styled span; restores the caret after it */
+  const wrapSelection = (css: string): void => {
+    const el = editRef.current
+    const sel = window.getSelection()
+    if (!el || !sel || sel.rangeCount === 0 || sel.isCollapsed) return
+    const range = sel.getRangeAt(0)
+    if (!el.contains(range.commonAncestorContainer)) return
+    const span = document.createElement('span')
+    span.setAttribute('style', css)
+    try {
+      range.surroundContents(span)
+      sel.removeAllRanges()
+      const r = document.createRange()
+      r.selectNodeContents(span)
+      r.collapse(false)
+      sel.addRange(r)
+    } catch {
+      /* selection crosses run boundaries: leave it unchanged */
+    }
+  }
+
+  const alignCmd: Record<'left' | 'center' | 'right', string> = {
+    left: 'justifyLeft',
+    center: 'justifyCenter',
+    right: 'justifyRight',
+  }
+
+  const fontOptions = fontFamiliesFor(lang)
 
   const display = (text: string) => {
     const t = text
@@ -232,6 +301,109 @@ export function HeaderFooterArea({
         >
           {t('ribbonPicture')}
         </button>
+      )}
+      {editing && (
+        <div
+          className="page-hf-toolbar"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <select
+            className="page-hf-tb-font"
+            data-tip={t('ribbonFontFamilyTip')}
+            value=""
+            onChange={(e) => {
+              const f = e.target.value
+              if (f) wrapSelection(`font-family:${JSON.stringify(f)}`)
+              e.target.value = ''
+            }}
+          >
+            <option value="" disabled>
+              {t('ribbonFontFamilyTip')}
+            </option>
+            {fontOptions.map((f) => (
+              <option key={f} value={f} style={{ fontFamily: f }}>
+                {f}
+              </option>
+            ))}
+          </select>
+          <select
+            className="page-hf-tb-size"
+            data-tip={t('ribbonFontSizeTip')}
+            value=""
+            onChange={(e) => {
+              const n = Number(e.target.value)
+              if (Number.isFinite(n) && n > 0) wrapSelection(`font-size:${n}pt`)
+              e.target.value = ''
+            }}
+          >
+            <option value="" disabled>
+              {t('ribbonFontSizeTip')}
+            </option>
+            {HF_FONT_SIZES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <span className="page-hf-tb-sep" />
+          <button data-tip={t('ribbonBoldTip')} onClick={() => exec('bold')}>
+            <b>B</b>
+          </button>
+          <button data-tip={t('ribbonItalicTip')} onClick={() => exec('italic')}>
+            <i>I</i>
+          </button>
+          <button data-tip={t('ribbonUnderlineTip')} onClick={() => exec('underline')}>
+            <u>U</u>
+          </button>
+          <span className="page-hf-tb-sep" />
+          <span className="page-hf-tb-color-wrap">
+            <button
+              className="page-hf-tb-color"
+              data-tip={t('ribbonFontColor')}
+              onClick={() => setColorOpen((v) => !v)}
+            >
+              <IconFontColorA size={14} />
+            </button>
+            {colorOpen && (
+              <span className="page-hf-tb-colors" onMouseDown={(e) => e.preventDefault()}>
+                {HF_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    className="page-hf-tb-swatch"
+                    style={{ background: `#${c}` }}
+                    data-tip={`#${c}`}
+                    onClick={() => {
+                      exec('foreColor', `#${c}`)
+                      setColorOpen(false)
+                    }}
+                  />
+                ))}
+              </span>
+            )}
+          </span>
+          <span className="page-hf-tb-sep" />
+          <button data-tip={t('ribbonAlignLeftTip')} onClick={() => exec(alignCmd.left)}>
+            <IconAlignLeft size={14} />
+          </button>
+          <button data-tip={t('ribbonAlignCenterTip')} onClick={() => exec(alignCmd.center)}>
+            <IconAlignCenter size={14} />
+          </button>
+          <button data-tip={t('ribbonAlignRightTip')} onClick={() => exec(alignCmd.right)}>
+            <IconAlignRight size={14} />
+          </button>
+          <span className="page-hf-tb-sep" />
+          <button data-tip={t('ribbonPageNumber')} onClick={() => exec('insertText', PAGE_TOKEN)}>
+            <IconPageNumber size={14} />
+          </button>
+          <button data-tip={t('hfTotalPagesTip')} onClick={() => exec('insertText', TOTAL_TOKEN)}>
+            ∑
+          </button>
+          <span className="page-hf-tb-sep" />
+          <button className="page-hf-tb-close" onClick={() => editRef.current?.blur()}>
+            <IconClose size={14} /> {t('ribbonClose')}
+          </button>
+        </div>
       )}
       {editing ? (
         <div
