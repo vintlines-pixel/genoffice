@@ -13,6 +13,7 @@ import {
   markDocSeen,
   type AiCommentsAccess,
   type AiHeaderFooterAccess,
+  type AiSectionAccess,
   type FrozenSelection,
 } from './tools'
 
@@ -33,6 +34,7 @@ export function createDocsSkill(
   getTrack?: () => AiTrack | undefined,
   getComments?: () => AiCommentsAccess | undefined,
   getHf?: () => AiHeaderFooterAccess | undefined,
+  getSection?: () => AiSectionAccess | undefined,
   /** live predicate (gsk login && cloud-tools toggle); false hides generate_image */
   gskTools?: () => boolean,
 ): AgentSkill {
@@ -68,6 +70,7 @@ export function createDocsSkill(
         frozen,
         getComments?.(),
         getHf?.(),
+        getSection?.(),
       ),
   }
 }

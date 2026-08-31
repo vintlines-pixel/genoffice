@@ -128,6 +128,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: '编辑图表数据(块 {index})',
     aiSumSetHeader: '更新页眉',
     aiSumSetFooter: '更新页脚',
+    aiSumPageSetup: '更新页面设置',
     aiSumApplyCommands: '执行格式命令',
     aiCmdNone: '没有命中需要修改的块,文档未改动。',
     aiCmdNoneSkipped:
@@ -281,6 +282,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Edited chart data (block {index})',
     aiSumSetHeader: 'Updated header',
     aiSumSetFooter: 'Updated footer',
+    aiSumPageSetup: 'Updated page setup',
     aiSumApplyCommands: 'Apply formatting commands',
     aiCmdNone: 'No matching blocks; the document was not changed.',
     aiCmdNoneSkipped:
@@ -434,6 +436,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'グラフデータを編集(ブロック {index})',
     aiSumSetHeader: 'ヘッダーを更新',
     aiSumSetFooter: 'フッターを更新',
+    aiSumPageSetup: 'ページ設定を更新',
     aiSumApplyCommands: '書式コマンドを実行',
     aiCmdNone: '変更対象のブロックが見つからなかったため、文書は変更されていません。',
     aiCmdNoneSkipped:
@@ -587,6 +590,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: '차트 데이터 편집(블록 {index})',
     aiSumSetHeader: '머리글 업데이트',
     aiSumSetFooter: '바닥글 업데이트',
+    aiSumPageSetup: '페이지 설정 업데이트',
     aiSumApplyCommands: '서식 명령 실행',
     aiCmdNone: '수정할 블록이 없어 문서가 변경되지 않았습니다.',
     aiCmdNoneSkipped:
@@ -745,6 +749,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Données du graphique modifiées (bloc {index})',
     aiSumSetHeader: 'En-tête mis à jour',
     aiSumSetFooter: 'Pied de page mis à jour',
+    aiSumPageSetup: 'Mise en page mise à jour',
     aiSumApplyCommands: 'Appliquer des commandes de mise en forme',
     aiCmdNone: "Aucun bloc correspondant ; le document n'a pas été modifié.",
     aiCmdNoneSkipped:
@@ -902,6 +907,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Diagrammdaten bearbeitet (Block {index})',
     aiSumSetHeader: 'Kopfzeile aktualisiert',
     aiSumSetFooter: 'Fußzeile aktualisiert',
+    aiSumPageSetup: 'Seitenlayout aktualisiert',
     aiSumApplyCommands: 'Formatierungsbefehle anwenden',
     aiCmdNone: 'Keine passenden Blöcke gefunden; das Dokument wurde nicht geändert.',
     aiCmdNoneSkipped:
@@ -1058,6 +1064,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Datos del gráfico editados (bloque {index})',
     aiSumSetHeader: 'Encabezado actualizado',
     aiSumSetFooter: 'Pie de página actualizado',
+    aiSumPageSetup: 'Configuración de página actualizada',
     aiSumApplyCommands: 'Aplicar comandos de formato',
     aiCmdNone: 'No hay bloques coincidentes; el documento no se modificó.',
     aiCmdNoneSkipped:
@@ -1209,6 +1216,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'แก้ไขข้อมูลแผนภูมิ (บล็อก {index})',
     aiSumSetHeader: 'อัปเดตหัวกระดาษ',
     aiSumSetFooter: 'อัปเดตท้ายกระดาษ',
+    aiSumPageSetup: 'อัปเดตการตั้งค่าหน้ากระดาษ',
     aiSumApplyCommands: 'ใช้คำสั่งการจัดรูปแบบ',
     aiCmdNone: 'ไม่พบบล็อกที่ต้องแก้ไข เอกสารไม่มีการเปลี่ยนแปลง',
     aiCmdNoneSkipped:
@@ -1362,6 +1370,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Data bagan diedit (blok {index})',
     aiSumSetHeader: 'Header diperbarui',
     aiSumSetFooter: 'Footer diperbarui',
+    aiSumPageSetup: 'Pengaturan halaman diperbarui',
     aiSumApplyCommands: 'Terapkan perintah pemformatan',
     aiCmdNone: 'Tidak ada blok yang cocok; dokumen tidak diubah.',
     aiCmdNoneSkipped:
@@ -1516,6 +1525,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Изменены данные диаграммы (блок {index})',
     aiSumSetHeader: 'Верхний колонтитул обновлён',
     aiSumSetFooter: 'Нижний колонтитул обновлён',
+    aiSumPageSetup: 'Параметры страницы обновлены',
     aiSumApplyCommands: 'Применение команд форматирования',
     aiCmdNone: 'Подходящих блоков не найдено; документ не изменен.',
     aiCmdNoneSkipped:
@@ -1667,6 +1677,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'تم تحرير بيانات المخطط (الكتلة {index})',
     aiSumSetHeader: 'تم تحديث رأس الصفحة',
     aiSumSetFooter: 'تم تحديث تذييل الصفحة',
+    aiSumPageSetup: 'تم تحديث إعداد الصفحة',
     aiSumApplyCommands: 'تنفيذ أوامر التنسيق',
     aiCmdNone: 'لا توجد كتل مطابقة؛ لم يتغير المستند.',
     aiCmdNoneSkipped:
@@ -1822,6 +1833,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Dados do gráfico editados (bloco {index})',
     aiSumSetHeader: 'Cabeçalho atualizado',
     aiSumSetFooter: 'Rodapé atualizado',
+    aiSumPageSetup: 'Configuração de página atualizada',
     aiSumApplyCommands: 'Aplicar comandos de formatação',
     aiCmdNone: 'Nenhum bloco correspondente; o documento não foi alterado.',
     aiCmdNoneSkipped:
@@ -1981,6 +1993,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Dati del grafico modificati (blocco {index})',
     aiSumSetHeader: 'Intestazione aggiornata',
     aiSumSetFooter: 'Piè di pagina aggiornato',
+    aiSumPageSetup: 'Impostazione pagina aggiornata',
     aiSumApplyCommands: 'Applica comandi di formattazione',
     aiCmdNone: 'Nessun blocco corrispondente; il documento non è stato modificato.',
     aiCmdNoneSkipped:
@@ -2135,6 +2148,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Edytowano dane wykresu (blok {index})',
     aiSumSetHeader: 'Zaktualizowano nagłówek',
     aiSumSetFooter: 'Zaktualizowano stopkę',
+    aiSumPageSetup: 'Zaktualizowano ustawienia strony',
     aiSumApplyCommands: 'Zastosuj polecenia formatowania',
     aiCmdNone: 'Brak pasujących bloków; dokument nie został zmieniony.',
     aiCmdNoneSkipped:
@@ -2290,6 +2304,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Grafiekgegevens bewerkt (blok {index})',
     aiSumSetHeader: 'Koptekst bijgewerkt',
     aiSumSetFooter: 'Voettekst bijgewerkt',
+    aiSumPageSetup: 'Pagina-instelling bijgewerkt',
     aiSumApplyCommands: 'Opmaakopdrachten toepassen',
     aiCmdNone: 'Geen overeenkomende blokken; het document is niet gewijzigd.',
     aiCmdNoneSkipped:
@@ -2443,6 +2458,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'Data carta diedit (blok {index})',
     aiSumSetHeader: 'Pengepala dikemas kini',
     aiSumSetFooter: 'Pengaki dikemas kini',
+    aiSumPageSetup: 'Tetapan halaman dikemas kini',
     aiSumApplyCommands: 'Guna perintah pemformatan',
     aiCmdNone: 'Tiada blok sepadan; dokumen tidak diubah.',
     aiCmdNoneSkipped:
@@ -2591,6 +2607,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'נערכו נתוני התרשים (בלוק {index})',
     aiSumSetHeader: 'הכותרת העליונה עודכנה',
     aiSumSetFooter: 'הכותרת התחתונה עודכנה',
+    aiSumPageSetup: 'הגדרת העמוד עודכנה',
     aiSumApplyCommands: 'החלת פקודות עיצוב',
     aiCmdNone: 'לא נמצאו בלוקים מתאימים; המסמך לא שונה.',
     aiCmdNoneSkipped:
@@ -2745,6 +2762,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: 'चार्ट डेटा संपादित किया गया (ब्लॉक {index})',
     aiSumSetHeader: 'हेडर अपडेट किया गया',
     aiSumSetFooter: 'फुटर अपडेट किया गया',
+    aiSumPageSetup: 'पेज सेटअप अपडेट किया गया',
     aiSumApplyCommands: 'स्वरूपण आदेश लागू करें',
     aiCmdNone: 'कोई मेल खाता ब्लॉक नहीं; दस्तावेज़ में बदलाव नहीं हुआ।',
     aiCmdNoneSkipped:
@@ -2891,6 +2909,7 @@ export const aiStrings = defineStrings({
     aiSumEditedChart: '編輯圖表資料(區塊 {index})',
     aiSumSetHeader: '更新頁首',
     aiSumSetFooter: '更新頁尾',
+    aiSumPageSetup: '更新頁面設定',
     aiSumApplyCommands: '執行格式命令',
     aiCmdNone: '沒有命中需要修改的區塊,文件未變更。',
     aiCmdNoneSkipped:

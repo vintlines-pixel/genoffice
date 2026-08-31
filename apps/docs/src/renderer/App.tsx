@@ -39,7 +39,7 @@ import {
 import type { AiDocContent, AiSettings, OpenDocxResult } from '../shared/ipc'
 import { AI_PROVIDERS } from '../shared/ipc'
 import { AiPanel, AI_REVISION_AUTHOR } from './ai/AiPanel'
-import type { AiCommentsAccess, AiHeaderFooterAccess } from './ai/tools'
+import type { AiCommentsAccess, AiHeaderFooterAccess, AiSectionAccess } from './ai/tools'
 import { applyHfText, hfEditText } from './editor/hf-text'
 import { AiAskPopover } from './components/AiAskPopover'
 import { EDIT_QUEUE_MAX, selectionForAnchor, type DocsEditQueueItem } from './ai/edit-queue'
@@ -3740,6 +3740,37 @@ export function App() {
     [],
   )
 
+  // AI page-setup tool: reads the live section and writes through the same commit
+  // path as the layout ribbon (dirty flags, per-section edits). Recreated per render
+  // so the ref always sees the current section/sections/activeSection.
+  const aiSectionCtx = {
+    read(): SectionSettings | null {
+      return section
+    },
+    set(next: SectionSettings): string | null {
+      if (isProtected || readMode) return 'the document is read-only; page setup cannot be changed'
+      setSections((prev) =>
+        prev.map((s, i) => (i === activeSection ? { ...s, settings: next } : s)),
+      )
+      if (sections.length <= 1 || activeSection === sections.length - 1) {
+        setSection(next)
+        setSectionDirty(true)
+      } else {
+        setSectionsDirty((d) => (d.includes(activeSection) ? d : [...d, activeSection]))
+      }
+      return null
+    },
+  }
+  const aiSectionCtxRef = useRef(aiSectionCtx)
+  aiSectionCtxRef.current = aiSectionCtx
+  const aiSectionAccess = useMemo<AiSectionAccess>(
+    () => ({
+      read: () => aiSectionCtxRef.current.read(),
+      set: (next) => aiSectionCtxRef.current.set(next),
+    }),
+    [],
+  )
+
   const ribbonActions = useStableCallbacks({
     allocateNumId: (kind: 'bullet' | 'ordered') => allocateListNumId(kind),
     createListDef: (levels: CustomNumberingLevel[]) => createCustomListDef(levels),
@@ -4073,6 +4104,7 @@ export function App() {
               onQueueConsume={queueConsume}
               commentsAccess={aiCommentsAccess}
               hfAccess={aiHfAccess}
+              sectionAccess={aiSectionAccess}
             />
           </div>
         )}

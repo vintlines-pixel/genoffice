@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import type { ChartDisplay, CommentInfo, NewChart } from '@genoffice/docx-engine'
+import type { ChartDisplay, CommentInfo, NewChart, SectionSettings } from '@genoffice/docx-engine'
 import type { AgentToolCall, AgentToolDef, CreateDocumentType } from '../../shared/ipc'
 import { t } from '../i18n/locale'
 import { executeCommands, type Command, type CommandEnvelope } from './commands'
@@ -295,6 +295,28 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     },
   },
   {
+    name: 'set_page_setup',
+    description:
+      'Change page setup: margins, paper size, and orientation. Pass only what needs to change (a "margins" preset, individual margins in cm, "paper", and/or "orientation"). Margins are in centimeters; paper presets A4 (21.0×29.7 cm) and Letter (21.59×27.94 cm). For "make the margins narrower" use margins "narrow".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        margins: {
+          type: 'string',
+          enum: ['normal', 'narrow', 'moderate', 'wide'],
+          description: 'Word margin preset applied to all four sides (normal 2.54cm, narrow 1.27cm, moderate 2.54/1.91cm, wide 2.54/5.08cm)',
+        },
+        marginTop: { type: 'number', description: 'top margin in cm' },
+        marginRight: { type: 'number', description: 'right margin in cm' },
+        marginBottom: { type: 'number', description: 'bottom margin in cm' },
+        marginLeft: { type: 'number', description: 'left margin in cm' },
+        paper: { type: 'string', enum: ['a4', 'letter'], description: 'paper size preset' },
+        orientation: { type: 'string', enum: ['portrait', 'landscape'], description: 'page orientation' },
+      },
+      required: [],
+    },
+  },
+  {
     name: 'create_document',
     description:
       'Create a NEW standalone file in the default save folder and open it in a new tab; the current document is not modified. Use when the user asks to put content into a new/separate document instead of this one. ' +
@@ -340,6 +362,17 @@ export interface AiCommentsAccess {
   reply(parentId: string, text: string): boolean
   /** false when the thread does not exist */
   resolve(id: string): boolean
+}
+
+/**
+ * The App-owned page-setup state (margins / paper size / orientation), handed
+ * to the tool executor. Writes run the same commit path as the layout ribbon
+ * (dirty flags, per-section edits), so the docx save path needs no changes.
+ */
+export interface AiSectionAccess {
+  read(): SectionSettings | null
+  /** apply page setup to the active section; returns an error message, or null on success */
+  set(next: SectionSettings): string | null
 }
 
 /**
@@ -656,6 +689,7 @@ export function executeTool(
   frozen?: FrozenSelection | null,
   comments?: AiCommentsAccess,
   hf?: AiHeaderFooterAccess,
+  section?: AiSectionAccess,
 ): ToolExecution | Promise<ToolExecution> {
   const scope = frozen && frozen.doc === editor.state.doc ? frozen.scope : null
   const staleSummary = INDEX_WRITE_SUMMARIES[call.name]
@@ -678,7 +712,7 @@ export function executeTool(
   ) {
     return executeAsyncTool(editor, call, signal)
   }
-  return settle(executeSyncTool(editor, call, numIds, track, scope, comments, hf))
+  return settle(executeSyncTool(editor, call, numIds, track, scope, comments, hf, section))
 }
 
 function executeSyncTool(
@@ -689,6 +723,7 @@ function executeSyncTool(
   scope?: SelectionScope | null,
   comments?: AiCommentsAccess,
   hf?: AiHeaderFooterAccess,
+  section?: AiSectionAccess,
 ): ToolExecution {
   switch (call.name) {
     case 'get_document_context':
@@ -1032,6 +1067,77 @@ function executeSyncTool(
         output: `Updated the ${kind}${view !== 'default' ? ` (${view}-page variant)` : ''}.`,
         mutated: false, // app state only, saved with the document; not part of the PM doc
         summary: summaryOf(),
+      }
+    }
+
+    case 'set_page_setup': {
+      if (!section) return fail(t('aiSumPageSetup'), 'page setup is not available here')
+      const current = section.read()
+      if (!current) return fail(t('aiSumPageSetup'), 'no page setup to edit')
+      const cmToTwips = (cm: number): number => Math.round((cm * 1440) / 2.54)
+      const twipsToCm = (t: number): number => (t * 2.54) / 1440
+      const num = (v: unknown): number | undefined =>
+        typeof v === 'number' && Number.isFinite(v) ? v : undefined
+      const MARGIN_PRESETS: Record<string, { top: number; bottom: number; left: number; right: number }> = {
+        normal: { top: 2.54, bottom: 2.54, left: 2.54, right: 2.54 },
+        narrow: { top: 1.27, bottom: 1.27, left: 1.27, right: 1.27 },
+        moderate: { top: 2.54, bottom: 2.54, left: 1.91, right: 1.91 },
+        wide: { top: 2.54, bottom: 2.54, left: 5.08, right: 5.08 },
+      }
+      const PAPERS: Record<string, { w: number; h: number }> = {
+        a4: { w: 21.0, h: 29.7 },
+        letter: { w: 21.59, h: 27.94 },
+      }
+      const next: SectionSettings = { ...current }
+      const margins = call.input.margins === undefined ? '' : String(call.input.margins)
+      if (margins) {
+        const preset = MARGIN_PRESETS[margins]
+        if (!preset)
+          return fail(t('aiSumPageSetup'), 'margins preset must be normal, narrow, moderate or wide')
+        next.marginTop = cmToTwips(preset.top)
+        next.marginBottom = cmToTwips(preset.bottom)
+        next.marginLeft = cmToTwips(preset.left)
+        next.marginRight = cmToTwips(preset.right)
+      }
+      for (const key of ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'] as const) {
+        const v = num(call.input[key])
+        if (v === undefined) continue
+        if (v < 0.1 || v > 15)
+          return fail(t('aiSumPageSetup'), `${key} must be between 0.1 and 15 cm`)
+        next[key] = cmToTwips(v)
+      }
+      const paper = call.input.paper === undefined ? '' : String(call.input.paper)
+      if (paper) {
+        const p = PAPERS[paper]
+        if (!p) return fail(t('aiSumPageSetup'), 'paper must be "a4" or "letter"')
+        if (next.orientation === 'landscape') {
+          next.pageWidth = cmToTwips(p.h)
+          next.pageHeight = cmToTwips(p.w)
+        } else {
+          next.pageWidth = cmToTwips(p.w)
+          next.pageHeight = cmToTwips(p.h)
+        }
+      }
+      const orientation = call.input.orientation === undefined ? '' : String(call.input.orientation)
+      if (orientation) {
+        if (orientation !== 'portrait' && orientation !== 'landscape')
+          return fail(t('aiSumPageSetup'), 'orientation must be "portrait" or "landscape"')
+        if (orientation !== next.orientation) {
+          const w = next.pageWidth
+          next.pageWidth = next.pageHeight
+          next.pageHeight = w
+          next.orientation = orientation
+        }
+      }
+      const error = section.set(next)
+      if (error) return fail(t('aiSumPageSetup'), error)
+      const cm = (t: number): string => twipsToCm(t).toFixed(1)
+      return {
+        output:
+          `Page setup updated: margins ${cm(next.marginTop)}/${cm(next.marginRight)}/${cm(next.marginBottom)}/${cm(next.marginLeft)} cm (T/R/B/L), ` +
+          `paper ${cm(next.pageWidth)}×${cm(next.pageHeight)} cm, ${next.orientation}.`,
+        mutated: false, // app state only, saved with the document; not part of the PM doc
+        summary: t('aiSumPageSetup'),
       }
     }
 

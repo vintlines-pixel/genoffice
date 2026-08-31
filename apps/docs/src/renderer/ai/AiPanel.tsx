@@ -8,7 +8,7 @@ import { ATTACHMENT_IMAGE_EXTS } from '../../shared/ipc'
 import type { PmNode } from '../editor/convert'
 import { countWords, findNumId, type NumIds } from './protocol'
 import { DOC_NAV_SCHEME, navigateToBlock, parseDocNavHref } from './doc-nav'
-import { markDocSeen, type AiCommentsAccess, type AiHeaderFooterAccess } from './tools'
+import { markDocSeen, type AiCommentsAccess, type AiHeaderFooterAccess, type AiSectionAccess } from './tools'
 import { createDocsSkill } from './docs-skill'
 import { EditQueueCard } from './EditQueueCard'
 import {
@@ -284,6 +284,8 @@ interface AiPanelProps {
   commentsAccess?: AiCommentsAccess
   /** header/footer state for the set_header_footer tool and per-turn context */
   hfAccess?: AiHeaderFooterAccess
+  /** page-setup state for the set_page_setup tool */
+  sectionAccess?: AiSectionAccess
 }
 
 export function AiPanel({
@@ -305,6 +307,7 @@ export function AiPanel({
   onQueueConsume,
   commentsAccess,
   hfAccess,
+  sectionAccess,
 }: AiPanelProps) {
   const { t } = useI18n()
   const [input, setInput] = useState('')
@@ -457,6 +460,8 @@ export function AiPanel({
   commentsAccessRef.current = commentsAccess
   const hfAccessRef = useRef(hfAccess)
   hfAccessRef.current = hfAccess
+  const sectionAccessRef = useRef(sectionAccess)
+  sectionAccessRef.current = sectionAccess
 
   /** drop every aiChanged flag; silent = skip undo history (auto-accept path) */
   const clearAiHighlights = (silent = false) => {
@@ -614,6 +619,7 @@ export function AiPanel({
           () => (trackChangesRef.current ? { author: AI_REVISION_AUTHOR } : undefined),
           () => commentsAccessRef.current,
           () => hfAccessRef.current,
+          () => sectionAccessRef.current,
           () => gskToolsOnRef.current(),
         ),
         createFilesSkill(availableAttachments),
