@@ -1121,8 +1121,8 @@ const headerFooterPartsSchema = z
   .strict()
 
 /// Page Layout settings the user changed this session for one sheet; absent
-/// fields stay verbatim in the file. Margin presets use the standard
-/// normal/wide/narrow values.
+/// fields stay verbatim in the file. Margins are a preset name or explicit
+/// inch values (Excel's Custom Margins dialog).
 export const workbookPageSetupStateSchema = z
   .object({
     sheetId: z.string().min(1),
@@ -1133,7 +1133,21 @@ export const workbookPageSetupStateSchema = z
     fitToWidth: z.number().int().min(0).max(1_000).optional(),
     fitToHeight: z.number().int().min(0).max(1_000).optional(),
     fitToPage: z.boolean().optional(),
-    margins: z.enum(['normal', 'wide', 'narrow']).optional(),
+    margins: z
+      .union([
+        z.enum(['normal', 'wide', 'narrow']),
+        z
+          .object({
+            left: z.number().min(0).max(10),
+            right: z.number().min(0).max(10),
+            top: z.number().min(0).max(10),
+            bottom: z.number().min(0).max(10),
+            header: z.number().min(0).max(10),
+            footer: z.number().min(0).max(10),
+          })
+          .strict(),
+      ])
+      .optional(),
     printGridlines: z.boolean().optional(),
     printHeadings: z.boolean().optional(),
     showGridlines: z.boolean().optional(),
@@ -2364,6 +2378,9 @@ export const workbookExportPdfRequestSchema = z
     /// boxes; `pageNumber`/`totalPages` spans resolve per page).
     headerTemplate: z.string().min(1).max(50_000).optional(),
     footerTemplate: z.string().min(1).max(50_000).optional(),
+    /// Chromium pageRanges subset to print, e.g. '1-3,5' (1-based, of the
+    /// paginated output); absent = every page.
+    pageRanges: z.string().regex(/^[0-9][0-9,\-]{0,63}$/).optional(),
   })
   .strict()
 
@@ -2372,8 +2389,16 @@ export const workbookExportPdfResultSchema = z.union([
   z.object({ canceled: z.literal(false), path: z.string().min(1) }).strict(),
 ])
 
+/// Preview renders the same payload to a throwaway PDF and shows it in the
+/// built-in viewer window; nothing is saved.
+export const workbookPreviewPdfResultSchema = z.union([
+  z.object({ ok: z.literal(true) }).strict(),
+  z.object({ ok: z.literal(false), error: z.string().min(1) }).strict(),
+])
+
 export type WorkbookExportPdfRequest = z.infer<typeof workbookExportPdfRequestSchema>
 export type WorkbookExportPdfResult = z.infer<typeof workbookExportPdfResultSchema>
+export type WorkbookPreviewPdfResult = z.infer<typeof workbookPreviewPdfResultSchema>
 
 /// CSV export of the active sheet: the renderer serializes display values,
 /// the main process runs the loss warning + save dialog and writes the bytes.
@@ -2511,6 +2536,9 @@ export interface DesktopApi {
     baseName: string,
   ): Promise<{ renamed: boolean; name?: string }>
   exportPdf(request: WorkbookExportPdfRequest): Promise<WorkbookExportPdfResult>
+  /// Renders the payload to a throwaway PDF and shows it in the built-in
+  /// preview window; never writes a user-visible file.
+  previewPdf(request: WorkbookExportPdfRequest): Promise<WorkbookPreviewPdfResult>
   exportCsv(request: WorkbookExportCsvRequest): Promise<WorkbookExportCsvResult>
   /// First Save of a CSV session: native "keep this format?" dialog.
   confirmCsvSave(): Promise<'csv' | 'xlsx' | 'cancel'>

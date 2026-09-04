@@ -70,6 +70,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       '打印/导出 PDF 时显示在每页顶部与底部。字段代码：&P 页码、&N 总页数、&D 日期、&T 时间、&F 文件名、&A 工作表名；输入 && 表示字面量 &。六格全部留空则清除页眉页脚。',
 
+    dlgMarginsTitle: '自定义边距',
+    dlgMarginsLeft: '左',
+    dlgMarginsRight: '右',
+    dlgMarginsTop: '上',
+    dlgMarginsBottom: '下',
+    dlgMarginsHeader: '页眉',
+    dlgMarginsFooter: '页脚',
+    dlgMarginsNote: '边距以英寸为单位（0–10）。页眉/页脚边距是距纸张上/下边缘的距离。',
+    dlgMarginsInvalid: '请输入 0–10 之间的数值。',
+
+    dlgExportPdfTitle: '导出为 PDF',
+    dlgExportPdfRangeAll: '全部页面',
+    dlgExportPdfRangeCustom: '页码范围',
+    dlgExportPdfRangePlaceholder: '如 1-3,5',
+    dlgExportPdfNote: '预览在独立窗口显示真实分页效果；页码范围对预览和导出同时生效。',
+    dlgExportPdfInvalidRange: '页码范围格式无效，请输入如 1-3,7-9 的范围。',
+    dlgExportPdfPreview: '预览',
+    dlgExportPdfExport: '导出',
+    dlgExportPdfPreviewFailed: '预览失败：{error}',
+
     dlgPivotCreateTitle: '创建数据透视表',
     dlgPivotEditTitle: '编辑数据透视表',
     dlgPivotNoFields: '请先选中源数据区域（含表头行，至少2行），再打开数据透视表。',
@@ -460,6 +480,26 @@ export const dialogStrings = defineStrings({
     dlgHfInsertCode: 'Insert {code}',
     dlgHfNote:
       'Shown at the top and bottom of every printed/PDF page. Field codes: &P page number, &N total pages, &D date, &T time, &F file name, &A sheet name; type && for a literal &. Leave all six sections empty to clear the header and footer.',
+
+    dlgMarginsTitle: 'Custom Margins',
+    dlgMarginsLeft: 'Left',
+    dlgMarginsRight: 'Right',
+    dlgMarginsTop: 'Top',
+    dlgMarginsBottom: 'Bottom',
+    dlgMarginsHeader: 'Header',
+    dlgMarginsFooter: 'Footer',
+    dlgMarginsNote: 'Margins are in inches (0–10). Header/footer margins are measured from the paper\'s top/bottom edge.',
+    dlgMarginsInvalid: 'Enter a value between 0 and 10.',
+
+    dlgExportPdfTitle: 'Export as PDF',
+    dlgExportPdfRangeAll: 'All pages',
+    dlgExportPdfRangeCustom: 'Page range',
+    dlgExportPdfRangePlaceholder: 'e.g. 1-3,5',
+    dlgExportPdfNote: 'The preview shows the real pagination in a separate window; the page range applies to both preview and export.',
+    dlgExportPdfInvalidRange: 'Invalid page range — enter ranges like 1-3,7-9.',
+    dlgExportPdfPreview: 'Preview',
+    dlgExportPdfExport: 'Export',
+    dlgExportPdfPreviewFailed: 'Preview failed: {error}',
 
     dlgPivotCreateTitle: 'Create PivotTable',
     dlgPivotEditTitle: 'Edit PivotTable',
@@ -863,6 +903,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       '印刷/PDF エクスポート時に各ページの上下に表示されます。フィールド コード: &P ページ番号、&N 総ページ数、&D 日付、&T 時刻、&F ファイル名、&A シート名。&& と入力すると & そのものになります。6 つの欄をすべて空にするとヘッダーとフッターを消去します。',
 
+    dlgMarginsTitle: 'ユーザー設定の余白',
+    dlgMarginsLeft: '左',
+    dlgMarginsRight: '右',
+    dlgMarginsTop: '上',
+    dlgMarginsBottom: '下',
+    dlgMarginsHeader: 'ヘッダー',
+    dlgMarginsFooter: 'フッター',
+    dlgMarginsNote: '余白の単位はインチ（0–10）です。ヘッダー/フッターの余白は用紙の上端/下端からの距離です。',
+    dlgMarginsInvalid: '0〜10 の数値を入力してください。',
+
+    dlgExportPdfTitle: 'PDF としてエクスポート',
+    dlgExportPdfRangeAll: 'すべてのページ',
+    dlgExportPdfRangeCustom: 'ページ範囲',
+    dlgExportPdfRangePlaceholder: '例: 1-3,5',
+    dlgExportPdfNote: 'プレビューは別ウィンドウで実際の改ページを表示します。ページ範囲はプレビューとエクスポートの両方に適用されます。',
+    dlgExportPdfInvalidRange: 'ページ範囲の形式が無効です。1-3,7-9 のように入力してください。',
+    dlgExportPdfPreview: 'プレビュー',
+    dlgExportPdfExport: 'エクスポート',
+    dlgExportPdfPreviewFailed: 'プレビューに失敗しました：{error}',
+
     dlgPivotCreateTitle: 'ピボットテーブルの作成',
     dlgPivotEditTitle: 'ピボットテーブルの編集',
     dlgPivotNoFields:
@@ -1263,6 +1323,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       '인쇄/PDF 내보내기 시 각 페이지의 위쪽과 아래쪽에 표시됩니다. 필드 코드: &P 페이지 번호, &N 전체 페이지 수, &D 날짜, &T 시간, &F 파일 이름, &A 시트 이름. &&를 입력하면 & 문자가 그대로 표시됩니다. 여섯 칸을 모두 비우면 머리글/바닥글이 지워집니다.',
 
+    dlgMarginsTitle: '사용자 지정 여백',
+    dlgMarginsLeft: '왼쪽',
+    dlgMarginsRight: '오른쪽',
+    dlgMarginsTop: '위',
+    dlgMarginsBottom: '아래',
+    dlgMarginsHeader: '머리글',
+    dlgMarginsFooter: '바닥글',
+    dlgMarginsNote: '여백 단위는 인치(0–10)입니다. 머리글/바닥글 여백은 용지 위/아래 가장자리부터의 거리입니다.',
+    dlgMarginsInvalid: '0에서 10 사이의 값을 입력하세요.',
+
+    dlgExportPdfTitle: 'PDF로 내보내기',
+    dlgExportPdfRangeAll: '전체 페이지',
+    dlgExportPdfRangeCustom: '페이지 범위',
+    dlgExportPdfRangePlaceholder: '예: 1-3,5',
+    dlgExportPdfNote: '미리 보기는 별도 창에 실제 페이지 나누기를 표시합니다. 페이지 범위는 미리 보기와 내보내기 모두에 적용됩니다.',
+    dlgExportPdfInvalidRange: '페이지 범위 형식이 잘못되었습니다. 1-3,7-9처럼 입력하세요.',
+    dlgExportPdfPreview: '미리 보기',
+    dlgExportPdfExport: '내보내기',
+    dlgExportPdfPreviewFailed: '미리 보기 실패: {error}',
+
     dlgPivotCreateTitle: '피벗 테이블 만들기',
     dlgPivotEditTitle: '피벗 테이블 편집',
     dlgPivotNoFields:
@@ -1660,6 +1740,26 @@ export const dialogStrings = defineStrings({
     dlgHfInsertCode: 'Insérer {code}',
     dlgHfNote:
       "Affiché en haut et en bas de chaque page imprimée/PDF. Codes de champ : &P numéro de page, &N nombre de pages, &D date, &T heure, &F nom de fichier, &A nom de la feuille ; tapez && pour un & littéral. Laissez les six sections vides pour effacer l'en-tête et le pied de page.",
+
+    dlgMarginsTitle: 'Marges personnalisées',
+    dlgMarginsLeft: 'Gauche',
+    dlgMarginsRight: 'Droite',
+    dlgMarginsTop: 'Haut',
+    dlgMarginsBottom: 'Bas',
+    dlgMarginsHeader: 'En-tête',
+    dlgMarginsFooter: 'Pied de page',
+    dlgMarginsNote: 'Marges en pouces (0–10). Les marges en-tête/pied de page se mesurent depuis le bord haut/bas du papier.',
+    dlgMarginsInvalid: 'Saisissez une valeur entre 0 et 10.',
+
+    dlgExportPdfTitle: 'Exporter en PDF',
+    dlgExportPdfRangeAll: 'Toutes les pages',
+    dlgExportPdfRangeCustom: 'Plage de pages',
+    dlgExportPdfRangePlaceholder: 'ex. 1-3,5',
+    dlgExportPdfNote: 'L\'aperçu affiche la vraie pagination dans une fenêtre séparée ; la plage de pages s\'applique à l\'aperçu comme à l\'export.',
+    dlgExportPdfInvalidRange: 'Plage de pages invalide — saisissez des plages comme 1-3,7-9.',
+    dlgExportPdfPreview: 'Aperçu',
+    dlgExportPdfExport: 'Exporter',
+    dlgExportPdfPreviewFailed: 'Échec de l\'aperçu : {error}',
 
     dlgPivotCreateTitle: 'Créer un tableau croisé dynamique',
     dlgPivotEditTitle: 'Modifier le tableau croisé dynamique',
@@ -2067,6 +2167,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       'Wird oben und unten auf jeder gedruckten/PDF-Seite angezeigt. Feldcodes: &P Seitenzahl, &N Seitenanzahl, &D Datum, &T Uhrzeit, &F Dateiname, &A Blattname; geben Sie && für ein &-Zeichen ein. Lassen Sie alle sechs Abschnitte leer, um Kopf- und Fußzeile zu löschen.',
 
+    dlgMarginsTitle: 'Benutzerdefinierte Ränder',
+    dlgMarginsLeft: 'Links',
+    dlgMarginsRight: 'Rechts',
+    dlgMarginsTop: 'Oben',
+    dlgMarginsBottom: 'Unten',
+    dlgMarginsHeader: 'Kopfzeile',
+    dlgMarginsFooter: 'Fußzeile',
+    dlgMarginsNote: 'Ränder sind in Zoll (0–10) angegeben. Kopf-/Fußzeilenränder messen ab der oberen/unteren Papierkante.',
+    dlgMarginsInvalid: 'Geben Sie einen Wert zwischen 0 und 10 ein.',
+
+    dlgExportPdfTitle: 'Als PDF exportieren',
+    dlgExportPdfRangeAll: 'Alle Seiten',
+    dlgExportPdfRangeCustom: 'Seitenbereich',
+    dlgExportPdfRangePlaceholder: 'z. B. 1-3,5',
+    dlgExportPdfNote: 'Die Vorschau zeigt den echten Seitenumbruch in einem eigenen Fenster; der Seitenbereich gilt für Vorschau und Export.',
+    dlgExportPdfInvalidRange: 'Ungültiger Seitenbereich — Bereiche wie 1-3,7-9 eingeben.',
+    dlgExportPdfPreview: 'Vorschau',
+    dlgExportPdfExport: 'Exportieren',
+    dlgExportPdfPreviewFailed: 'Vorschau fehlgeschlagen: {error}',
+
     dlgPivotCreateTitle: 'PivotTable erstellen',
     dlgPivotEditTitle: 'PivotTable bearbeiten',
     dlgPivotNoFields:
@@ -2472,6 +2592,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       'Se muestra en la parte superior e inferior de cada página impresa/PDF. Códigos de campo: &P número de página, &N total de páginas, &D fecha, &T hora, &F nombre de archivo, &A nombre de hoja; escribe && para un & literal. Deja las seis secciones vacías para borrar el encabezado y el pie de página.',
 
+    dlgMarginsTitle: 'Márgenes personalizados',
+    dlgMarginsLeft: 'Izquierda',
+    dlgMarginsRight: 'Derecha',
+    dlgMarginsTop: 'Superior',
+    dlgMarginsBottom: 'Inferior',
+    dlgMarginsHeader: 'Encabezado',
+    dlgMarginsFooter: 'Pie de página',
+    dlgMarginsNote: 'Los márgenes están en pulgadas (0–10). Los márgenes de encabezado/pie se miden desde el borde superior/inferior del papel.',
+    dlgMarginsInvalid: 'Escriba un valor entre 0 y 10.',
+
+    dlgExportPdfTitle: 'Exportar como PDF',
+    dlgExportPdfRangeAll: 'Todas las páginas',
+    dlgExportPdfRangeCustom: 'Rango de páginas',
+    dlgExportPdfRangePlaceholder: 'p. ej., 1-3,5',
+    dlgExportPdfNote: 'La vista previa muestra la paginación real en una ventana aparte; el rango de páginas se aplica tanto a la vista previa como a la exportación.',
+    dlgExportPdfInvalidRange: 'Rango de páginas no válido: escriba rangos como 1-3,7-9.',
+    dlgExportPdfPreview: 'Vista previa',
+    dlgExportPdfExport: 'Exportar',
+    dlgExportPdfPreviewFailed: 'Error de vista previa: {error}',
+
     dlgPivotCreateTitle: 'Crear tabla dinámica',
     dlgPivotEditTitle: 'Editar tabla dinámica',
     dlgPivotNoFields:
@@ -2875,6 +3015,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       'แสดงที่ด้านบนและด้านล่างของทุกหน้าที่พิมพ์/ส่งออก PDF รหัสฟิลด์: &P หมายเลขหน้า, &N จำนวนหน้าทั้งหมด, &D วันที่, &T เวลา, &F ชื่อไฟล์, &A ชื่อแผ่นงาน พิมพ์ && เพื่อแสดงอักขระ & เว้นทั้งหกช่องว่างเพื่อล้างหัวกระดาษและท้ายกระดาษ',
 
+    dlgMarginsTitle: 'ระยะขอบแบบกำหนดเอง',
+    dlgMarginsLeft: 'ซ้าย',
+    dlgMarginsRight: 'ขวา',
+    dlgMarginsTop: 'บน',
+    dlgMarginsBottom: 'ล่าง',
+    dlgMarginsHeader: 'หัวกระดาษ',
+    dlgMarginsFooter: 'ท้ายกระดาษ',
+    dlgMarginsNote: 'ระยะขอบเป็นนิ้ว (0–10) ระยะขอบหัว/ท้ายกระดาษวัดจากขอบบน/ล่างของกระดาษ',
+    dlgMarginsInvalid: 'ป้อนค่าระหว่าง 0 ถึง 10',
+
+    dlgExportPdfTitle: 'ส่งออกเป็น PDF',
+    dlgExportPdfRangeAll: 'ทุกหน้า',
+    dlgExportPdfRangeCustom: 'ช่วงหน้า',
+    dlgExportPdfRangePlaceholder: 'เช่น 1-3,5',
+    dlgExportPdfNote: 'ตัวอย่างจะแสดงการแบ่งหน้าจริงในหน้าต่างแยก ช่วงหน้ามีผลทั้งตัวอย่างและการส่งออก',
+    dlgExportPdfInvalidRange: 'รูปแบบช่วงหน้าไม่ถูกต้อง ป้อนช่วงเช่น 1-3,7-9',
+    dlgExportPdfPreview: 'ตัวอย่าง',
+    dlgExportPdfExport: 'ส่งออก',
+    dlgExportPdfPreviewFailed: 'ตัวอย่างล้มเหลว: {error}',
+
     dlgPivotCreateTitle: 'สร้าง PivotTable',
     dlgPivotEditTitle: 'แก้ไข PivotTable',
     dlgPivotNoFields:
@@ -3273,6 +3433,26 @@ export const dialogStrings = defineStrings({
     dlgHfInsertCode: 'Sisipkan {code}',
     dlgHfNote:
       'Ditampilkan di bagian atas dan bawah setiap halaman cetak/PDF. Kode bidang: &P nomor halaman, &N jumlah halaman, &D tanggal, &T waktu, &F nama file, &A nama lembar; ketik && untuk karakter & literal. Kosongkan keenam bagian untuk menghapus header dan footer.',
+
+    dlgMarginsTitle: 'Margin Khusus',
+    dlgMarginsLeft: 'Kiri',
+    dlgMarginsRight: 'Kanan',
+    dlgMarginsTop: 'Atas',
+    dlgMarginsBottom: 'Bawah',
+    dlgMarginsHeader: 'Header',
+    dlgMarginsFooter: 'Footer',
+    dlgMarginsNote: 'Margin dalam inci (0–10). Margin header/footer diukur dari tepi atas/bawah kertas.',
+    dlgMarginsInvalid: 'Masukkan nilai antara 0 dan 10.',
+
+    dlgExportPdfTitle: 'Ekspor sebagai PDF',
+    dlgExportPdfRangeAll: 'Semua halaman',
+    dlgExportPdfRangeCustom: 'Rentang halaman',
+    dlgExportPdfRangePlaceholder: 'mis. 1-3,5',
+    dlgExportPdfNote: 'Pratinjau menampilkan paginasi nyata di jendela terpisah; rentang halaman berlaku untuk pratinjau dan ekspor.',
+    dlgExportPdfInvalidRange: 'Rentang halaman tidak valid — masukkan rentang seperti 1-3,7-9.',
+    dlgExportPdfPreview: 'Pratinjau',
+    dlgExportPdfExport: 'Ekspor',
+    dlgExportPdfPreviewFailed: 'Pratinjau gagal: {error}',
 
     dlgPivotCreateTitle: 'Buat PivotTable',
     dlgPivotEditTitle: 'Edit PivotTable',
@@ -3676,6 +3856,26 @@ export const dialogStrings = defineStrings({
     dlgHfInsertCode: 'Вставить {code}',
     dlgHfNote:
       'Отображается вверху и внизу каждой печатной/PDF-страницы. Коды полей: &P номер страницы, &N число страниц, &D дата, &T время, &F имя файла, &A имя листа; введите &&, чтобы получить символ &. Оставьте все шесть секций пустыми, чтобы удалить колонтитулы.',
+
+    dlgMarginsTitle: 'Пользовательские поля',
+    dlgMarginsLeft: 'Слева',
+    dlgMarginsRight: 'Справа',
+    dlgMarginsTop: 'Сверху',
+    dlgMarginsBottom: 'Снизу',
+    dlgMarginsHeader: 'Верхний колонтитул',
+    dlgMarginsFooter: 'Нижний колонтитул',
+    dlgMarginsNote: 'Поля указываются в дюймах (0–10). Поля верхнего/нижнего колонтитула отмеряются от верхнего/нижнего края бумаги.',
+    dlgMarginsInvalid: 'Введите значение от 0 до 10.',
+
+    dlgExportPdfTitle: 'Экспорт в PDF',
+    dlgExportPdfRangeAll: 'Все страницы',
+    dlgExportPdfRangeCustom: 'Диапазон страниц',
+    dlgExportPdfRangePlaceholder: 'напр., 1-3,5',
+    dlgExportPdfNote: 'Предварительный просмотр показывает реальное разбиение на страницы в отдельном окне; диапазон действует и для просмотра, и для экспорта.',
+    dlgExportPdfInvalidRange: 'Неверный диапазон страниц — укажите диапазоны вида 1-3,7-9.',
+    dlgExportPdfPreview: 'Предпросмотр',
+    dlgExportPdfExport: 'Экспортировать',
+    dlgExportPdfPreviewFailed: 'Не удалось открыть предпросмотр: {error}',
 
     dlgPivotCreateTitle: 'Создать сводную таблицу',
     dlgPivotEditTitle: 'Изменить сводную таблицу',
@@ -4081,6 +4281,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       'يظهر أعلى كل صفحة مطبوعة/PDF وأسفلها. رموز الحقول: &P رقم الصفحة، &N عدد الصفحات، &D التاريخ، &T الوقت، &F اسم الملف، &A اسم الورقة؛ اكتب && لإدراج الحرف & نفسه. اترك الأقسام الستة كلها فارغة لمسح الرأس والتذييل.',
 
+    dlgMarginsTitle: 'هوامش مخصصة',
+    dlgMarginsLeft: 'يسار',
+    dlgMarginsRight: 'يمين',
+    dlgMarginsTop: 'أعلى',
+    dlgMarginsBottom: 'أسفل',
+    dlgMarginsHeader: 'رأس الصفحة',
+    dlgMarginsFooter: 'تذييل الصفحة',
+    dlgMarginsNote: 'الهوامش بالبوصة (0–10). هوامش رأس/تذييل الصفحة تُقاس من الحافة العلوية/السفلية للورق.',
+    dlgMarginsInvalid: 'أدخل قيمة بين 0 و10.',
+
+    dlgExportPdfTitle: 'تصدير إلى PDF',
+    dlgExportPdfRangeAll: 'كل الصفحات',
+    dlgExportPdfRangeCustom: 'نطاق الصفحات',
+    dlgExportPdfRangePlaceholder: 'مثال: 1-3,5',
+    dlgExportPdfNote: 'تعرض المعاينة التقسيم الفعلي للصفحات في نافذة منفصلة؛ ينسحب نطاق الصفحات على المعاينة والتصدير معاً.',
+    dlgExportPdfInvalidRange: 'نطاق صفحات غير صالح — أدخل نطاقات مثل 1-3,7-9.',
+    dlgExportPdfPreview: 'معاينة',
+    dlgExportPdfExport: 'تصدير',
+    dlgExportPdfPreviewFailed: 'فشلت المعاينة: {error}',
+
     dlgPivotCreateTitle: 'إنشاء PivotTable',
     dlgPivotEditTitle: 'تحرير PivotTable',
     dlgPivotNoFields:
@@ -4478,6 +4698,26 @@ export const dialogStrings = defineStrings({
     dlgHfInsertCode: 'Inserir {code}',
     dlgHfNote:
       'Exibido na parte superior e inferior de cada página impressa/PDF. Códigos de campo: &P número da página, &N total de páginas, &D data, &T hora, &F nome do arquivo, &A nome da planilha; digite && para um & literal. Deixe as seis seções vazias para limpar o cabeçalho e o rodapé.',
+
+    dlgMarginsTitle: 'Margens personalizadas',
+    dlgMarginsLeft: 'Esquerda',
+    dlgMarginsRight: 'Direita',
+    dlgMarginsTop: 'Superior',
+    dlgMarginsBottom: 'Inferior',
+    dlgMarginsHeader: 'Cabeçalho',
+    dlgMarginsFooter: 'Rodapé',
+    dlgMarginsNote: 'As margens estão em polegadas (0–10). As margens de cabeçalho/rodapé são medidas a partir da borda superior/inferior do papel.',
+    dlgMarginsInvalid: 'Digite um valor entre 0 e 10.',
+
+    dlgExportPdfTitle: 'Exportar como PDF',
+    dlgExportPdfRangeAll: 'Todas as páginas',
+    dlgExportPdfRangeCustom: 'Intervalo de páginas',
+    dlgExportPdfRangePlaceholder: 'ex.: 1-3,5',
+    dlgExportPdfNote: 'A visualização mostra a paginação real numa janela separada; o intervalo de páginas vale para a visualização e para a exportação.',
+    dlgExportPdfInvalidRange: 'Intervalo de páginas inválido — digite intervalos como 1-3,7-9.',
+    dlgExportPdfPreview: 'Visualizar',
+    dlgExportPdfExport: 'Exportar',
+    dlgExportPdfPreviewFailed: 'Falha na visualização: {error}',
 
     dlgPivotCreateTitle: 'Criar Tabela Dinâmica',
     dlgPivotEditTitle: 'Editar Tabela Dinâmica',
@@ -4881,6 +5121,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       'Mostrato in cima e in fondo a ogni pagina stampata/PDF. Codici di campo: &P numero di pagina, &N pagine totali, &D data, &T ora, &F nome file, &A nome foglio; digita && per una & letterale. Lascia vuote tutte e sei le sezioni per cancellare intestazione e piè di pagina.',
 
+    dlgMarginsTitle: 'Margini personalizzati',
+    dlgMarginsLeft: 'Sinistra',
+    dlgMarginsRight: 'Destra',
+    dlgMarginsTop: 'Alto',
+    dlgMarginsBottom: 'Basso',
+    dlgMarginsHeader: 'Intestazione',
+    dlgMarginsFooter: 'Piè di pagina',
+    dlgMarginsNote: 'I margini sono in pollici (0–10). I margini di intestazione/piè di pagina si misurano dal bordo superiore/inferiore del foglio.',
+    dlgMarginsInvalid: 'Immettere un valore compreso tra 0 e 10.',
+
+    dlgExportPdfTitle: 'Esporta come PDF',
+    dlgExportPdfRangeAll: 'Tutte le pagine',
+    dlgExportPdfRangeCustom: 'Intervallo di pagine',
+    dlgExportPdfRangePlaceholder: 'es. 1-3,5',
+    dlgExportPdfNote: 'L\'anteprima mostra la paginazione reale in una finestra separata; l\'intervallo di pagine vale per anteprima ed esportazione.',
+    dlgExportPdfInvalidRange: 'Intervallo di pagine non valido: immetti intervalli come 1-3,7-9.',
+    dlgExportPdfPreview: 'Anteprima',
+    dlgExportPdfExport: 'Esporta',
+    dlgExportPdfPreviewFailed: 'Anteprima non riuscita: {error}',
+
     dlgPivotCreateTitle: 'Crea tabella pivot',
     dlgPivotEditTitle: 'Modifica tabella pivot',
     dlgPivotNoFields:
@@ -5283,6 +5543,26 @@ export const dialogStrings = defineStrings({
     dlgHfInsertCode: 'Wstaw {code}',
     dlgHfNote:
       'Wyświetlane u góry i u dołu każdej drukowanej strony/strony PDF. Kody pól: &P numer strony, &N łączna liczba stron, &D data, &T godzina, &F nazwa pliku, &A nazwa arkusza; wpisz &&, aby uzyskać znak &. Pozostaw wszystkie sześć sekcji puste, aby wyczyścić nagłówek i stopkę.',
+
+    dlgMarginsTitle: 'Marginy niestandardowe',
+    dlgMarginsLeft: 'Lewy',
+    dlgMarginsRight: 'Prawy',
+    dlgMarginsTop: 'Górny',
+    dlgMarginsBottom: 'Dolny',
+    dlgMarginsHeader: 'Nagłówek',
+    dlgMarginsFooter: 'Stopka',
+    dlgMarginsNote: 'Marginesy podawane w calach (0–10). Marginesy nagłówka/stopy mierzy się od górnej/dolnej krawędzi papieru.',
+    dlgMarginsInvalid: 'Podaj wartość między 0 a 10.',
+
+    dlgExportPdfTitle: 'Eksportuj jako PDF',
+    dlgExportPdfRangeAll: 'Wszystkie strony',
+    dlgExportPdfRangeCustom: 'Zakres stron',
+    dlgExportPdfRangePlaceholder: 'np. 1-3,5',
+    dlgExportPdfNote: 'Podgląd pokazuje rzeczywisty podział na strony w osobnym oknie; zakres stron dotyczy podglądu i eksportu.',
+    dlgExportPdfInvalidRange: 'Nieprawidłowy zakres stron — podaj zakresy jak 1-3,7-9.',
+    dlgExportPdfPreview: 'Podgląd',
+    dlgExportPdfExport: 'Eksportuj',
+    dlgExportPdfPreviewFailed: 'Podgląd nie powiódł się: {error}',
 
     dlgPivotCreateTitle: 'Utwórz tabelę przestawną',
     dlgPivotEditTitle: 'Edytuj tabelę przestawną',
@@ -5688,6 +5968,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       "Wordt boven- en onderaan elke afgedrukte/PDF-pagina weergegeven. Veldcodes: &P paginanummer, &N totaal aantal pagina's, &D datum, &T tijd, &F bestandsnaam, &A bladnaam; typ && voor een letterlijke &. Laat alle zes secties leeg om de kop- en voettekst te wissen.",
 
+    dlgMarginsTitle: 'Aangepaste marges',
+    dlgMarginsLeft: 'Links',
+    dlgMarginsRight: 'Rechts',
+    dlgMarginsTop: 'Boven',
+    dlgMarginsBottom: 'Onder',
+    dlgMarginsHeader: 'Koptekst',
+    dlgMarginsFooter: 'Voettekst',
+    dlgMarginsNote: 'Marges zijn in inches (0–10). Kop-/voettekstmarges worden gemeten vanaf de boven-/onderrand van het papier.',
+    dlgMarginsInvalid: 'Voer een waarde tussen 0 en 10 in.',
+
+    dlgExportPdfTitle: 'Exporteren als PDF',
+    dlgExportPdfRangeAll: 'Alle pagina\'s',
+    dlgExportPdfRangeCustom: 'Paginabereik',
+    dlgExportPdfRangePlaceholder: 'bijv. 1-3,5',
+    dlgExportPdfNote: 'De voorbeeldweergave toont de echte paginaverdeling in een apart venster; het paginabereik geldt voor voorbeeld en export.',
+    dlgExportPdfInvalidRange: 'Ongeldig paginabereik — voer bereiken in zoals 1-3,7-9.',
+    dlgExportPdfPreview: 'Voorbeeld',
+    dlgExportPdfExport: 'Exporteren',
+    dlgExportPdfPreviewFailed: 'Voorbeeld mislukt: {error}',
+
     dlgPivotCreateTitle: 'Draaitabel maken',
     dlgPivotEditTitle: 'Draaitabel bewerken',
     dlgPivotNoFields:
@@ -6090,6 +6390,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       'Dipaparkan di bahagian atas dan bawah setiap halaman cetakan/PDF. Kod medan: &P nombor halaman, &N jumlah halaman, &D tarikh, &T masa, &F nama fail, &A nama helaian; taip && untuk aksara & literal. Biarkan keenam-enam bahagian kosong untuk mengosongkan pengepala dan pengaki.',
 
+    dlgMarginsTitle: 'Margin Tersuai',
+    dlgMarginsLeft: 'Kiri',
+    dlgMarginsRight: 'Kanan',
+    dlgMarginsTop: 'Atas',
+    dlgMarginsBottom: 'Bawah',
+    dlgMarginsHeader: 'Pengepala',
+    dlgMarginsFooter: 'Pengaki',
+    dlgMarginsNote: 'Margin dalam inci (0–10). Margin pengepala/pengaki diukur dari tepi atas/bawah kertas.',
+    dlgMarginsInvalid: 'Masukkan nilai antara 0 dan 10.',
+
+    dlgExportPdfTitle: 'Eksport sebagai PDF',
+    dlgExportPdfRangeAll: 'Semua halaman',
+    dlgExportPdfRangeCustom: 'Julat halaman',
+    dlgExportPdfRangePlaceholder: 'cth. 1-3,5',
+    dlgExportPdfNote: 'Pratonton menunjukkan penghalaan halaman sebenar dalam tetingkap berasingan; julat halaman terpakai untuk pratonton dan eksport.',
+    dlgExportPdfInvalidRange: 'Julat halaman tidak sah — masukkan julat seperti 1-3,7-9.',
+    dlgExportPdfPreview: 'Pratonton',
+    dlgExportPdfExport: 'Eksport',
+    dlgExportPdfPreviewFailed: 'Pratonton gagal: {error}',
+
     dlgPivotCreateTitle: 'Cipta Jadual Pangsi',
     dlgPivotEditTitle: 'Edit Jadual Pangsi',
     dlgPivotNoFields:
@@ -6490,6 +6810,26 @@ export const dialogStrings = defineStrings({
     dlgHfNote:
       'מוצג בראש ובתחתית כל עמוד מודפס/PDF. קודי שדה: ‎&P מספר עמוד, ‎&N סך העמודים, ‎&D תאריך, ‎&T שעה, ‎&F שם קובץ, ‎&A שם גיליון; הקלידו && לקבלת & כתו רגיל. השאירו את כל ששת המקטעים ריקים כדי לנקות את הכותרות.',
 
+    dlgMarginsTitle: 'שוליים מותאמים',
+    dlgMarginsLeft: 'שמאל',
+    dlgMarginsRight: 'ימין',
+    dlgMarginsTop: 'למעלה',
+    dlgMarginsBottom: 'למטה',
+    dlgMarginsHeader: 'כותרת עליונה',
+    dlgMarginsFooter: 'כותרת תחתונה',
+    dlgMarginsNote: 'השוליים באינצ\'ים (0–10). שולי הכותרת העליונה/התחתונה נמדדים מקצה העליון/התחתון של הדף.',
+    dlgMarginsInvalid: 'הזן ערך בין 0 ל-10.',
+
+    dlgExportPdfTitle: 'ייצא כ-PDF',
+    dlgExportPdfRangeAll: 'כל העמודים',
+    dlgExportPdfRangeCustom: 'טווח עמודים',
+    dlgExportPdfRangePlaceholder: 'לדוגמה 1-3,5',
+    dlgExportPdfNote: 'התצוגה המקדימה מציגה את החלוקה בפועל לעמודים בחלון נפרד; טווח העמודים חל גם על התצוגה המקדימה וגם על הייצוא.',
+    dlgExportPdfInvalidRange: 'טווח עמודים לא תקין — הזן טווחים כמו 1-3,7-9.',
+    dlgExportPdfPreview: 'תצוגה מקדימה',
+    dlgExportPdfExport: 'ייצוא',
+    dlgExportPdfPreviewFailed: 'התצוגה המקדימה נכשלה: {error}',
+
     dlgPivotCreateTitle: 'יצירת טבלת ציר',
     dlgPivotEditTitle: 'עריכת טבלת ציר',
     dlgPivotNoFields:
@@ -6883,6 +7223,26 @@ export const dialogStrings = defineStrings({
     dlgHfInsertCode: '{code} सम्मिलित करें',
     dlgHfNote:
       'हर मुद्रित/PDF पृष्ठ के ऊपर और नीचे दिखाई देता है। फ़ील्ड कोड: &P पृष्ठ संख्या, &N कुल पृष्ठ, &D दिनांक, &T समय, &F फ़ाइल नाम, &A शीट नाम; अक्षरशः & के लिए && टाइप करें। शीर्षलेख और पादलेख साफ़ करने के लिए सभी छह खंड खाली छोड़ें।',
+
+    dlgMarginsTitle: 'कस्टम मार्जिन',
+    dlgMarginsLeft: 'बायाँ',
+    dlgMarginsRight: 'दायाँ',
+    dlgMarginsTop: 'ऊपर',
+    dlgMarginsBottom: 'नीचे',
+    dlgMarginsHeader: 'शीर्षलेख',
+    dlgMarginsFooter: 'पादलेख',
+    dlgMarginsNote: 'मार्जिन इंच में हैं (0–10). हेडर/फ़ुटर मार्जिन कागज़ के ऊपरी/निचले किनारे से मापे जाते हैं।',
+    dlgMarginsInvalid: '0 और 10 के बीच कोई मान दर्ज करें।',
+
+    dlgExportPdfTitle: 'PDF के रूप में निर्यात करें',
+    dlgExportPdfRangeAll: 'सभी पृष्ठ',
+    dlgExportPdfRangeCustom: 'पृष्ठ श्रेणी',
+    dlgExportPdfRangePlaceholder: 'जैसे 1-3,5',
+    dlgExportPdfNote: 'प्रीव्यू अलग विंडो में असली पृष्ठ विभाजन दिखाता है; पृष्ठ श्रेणी प्रीव्यू और निर्यात दोनों पर लागू होती है।',
+    dlgExportPdfInvalidRange: 'पृष्ठ श्रेणी अमान्य है — 1-3,7-9 जैसी श्रेणियाँ दर्ज करें।',
+    dlgExportPdfPreview: 'प्रीव्यू',
+    dlgExportPdfExport: 'निर्यात',
+    dlgExportPdfPreviewFailed: 'प्रीव्यू विफल: {error}',
 
     dlgPivotCreateTitle: 'पिवट तालिका बनाएं',
     dlgPivotEditTitle: 'पिवट तालिका संपादित करें',
@@ -7282,6 +7642,26 @@ export const dialogStrings = defineStrings({
     dlgHfInsertCode: '插入 {code}',
     dlgHfNote:
       '列印／匯出 PDF 時顯示在每頁頂端與底部。欄位代碼：&P 頁碼、&N 總頁數、&D 日期、&T 時間、&F 檔案名稱、&A 工作表名稱；輸入 && 表示字面的 &。六格全部留空則清除頁首頁尾。',
+
+    dlgMarginsTitle: '自訂邊距',
+    dlgMarginsLeft: '左',
+    dlgMarginsRight: '右',
+    dlgMarginsTop: '上',
+    dlgMarginsBottom: '下',
+    dlgMarginsHeader: '頁首',
+    dlgMarginsFooter: '頁尾',
+    dlgMarginsNote: '邊距以英吋為單位（0–10）。頁首/頁尾邊距是距紙張上/下邊緣的距離。',
+    dlgMarginsInvalid: '請輸入 0–10 之間的數值。',
+
+    dlgExportPdfTitle: '匯出為 PDF',
+    dlgExportPdfRangeAll: '所有頁面',
+    dlgExportPdfRangeCustom: '頁碼範圍',
+    dlgExportPdfRangePlaceholder: '如 1-3,5',
+    dlgExportPdfNote: '預覽會在獨立視窗顯示實際分頁效果；頁碼範圍對預覽與匯出同時生效。',
+    dlgExportPdfInvalidRange: '頁碼範圍格式無效，請輸入如 1-3,7-9 的範圍。',
+    dlgExportPdfPreview: '預覽',
+    dlgExportPdfExport: '匯出',
+    dlgExportPdfPreviewFailed: '預覽失敗：{error}',
 
     dlgPivotCreateTitle: '建立樞紐分析表',
     dlgPivotEditTitle: '編輯樞紐分析表',

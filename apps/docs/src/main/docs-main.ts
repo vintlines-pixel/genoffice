@@ -51,6 +51,11 @@ import type {
 } from 'electron'
 import { parseFileToText } from '@genoffice/file-parse'
 import {
+  convertLegacyDoc,
+  docxTargetFor,
+  isLegacyDocPath,
+} from './doc-convert'
+import {
   cloudToolsEnabled,
   setRescueFetch,
   type AiSettings,
@@ -109,6 +114,8 @@ const tMain = createI18n({
   zh: {
     dlgOpenDoc: '打开文档',
     filterWord: 'Word 文档',
+    dlgDocImportFailed: '无法转换该 .doc 文件',
+    docTextImportNotice: '未找到 LibreOffice/Word，已按纯文本导入——原格式（加粗、表格、图片等）需重新排版。',
     dlgSaveAs: '另存为',
     closeUnsavedMsg: '此文档有未保存的更改。',
     closeUnsavedDetail: '关闭前是否保存？',
@@ -201,6 +208,8 @@ const tMain = createI18n({
   en: {
     dlgOpenDoc: 'Open Document',
     filterWord: 'Word Documents',
+    dlgDocImportFailed: 'This .doc file could not be converted',
+    docTextImportNotice: 'LibreOffice/Word was not found — imported as plain text. Original formatting (bold, tables, images…) needs re-formatting.',
     dlgSaveAs: 'Save As',
     closeUnsavedMsg: 'This document has unsaved changes.',
     closeUnsavedDetail: 'Do you want to save them before closing?',
@@ -295,6 +304,8 @@ const tMain = createI18n({
   ja: {
     dlgOpenDoc: '文書を開く',
     filterWord: 'Word 文書',
+    dlgDocImportFailed: 'この .doc ファイルを変換できませんでした',
+    docTextImportNotice: 'LibreOffice/Word が見つからないため、プレーンテキストとして読み込みました。元の書式（太字・表・画像など）は再整形が必要です。',
     dlgSaveAs: '名前を付けて保存',
     closeUnsavedMsg: 'このドキュメントに未保存の変更があります。',
     closeUnsavedDetail: '閉じる前に保存しますか？',
@@ -389,6 +400,8 @@ const tMain = createI18n({
   ko: {
     dlgOpenDoc: '문서 열기',
     filterWord: 'Word 문서',
+    dlgDocImportFailed: '이 .doc 파일을 변환할 수 없습니다',
+    docTextImportNotice: 'LibreOffice/Word를 찾을 수 없어 일반 텍스트로 가져왔습니다. 원래 서식(굵게, 표, 그림 등)은 다시 지정해야 합니다.',
     dlgSaveAs: '다른 이름으로 저장',
     closeUnsavedMsg: '이 문서에 저장하지 않은 변경 사항이 있습니다.',
     closeUnsavedDetail: '닫기 전에 저장하시겠습니까?',
@@ -484,6 +497,8 @@ const tMain = createI18n({
   fr: {
     dlgOpenDoc: 'Ouvrir un document',
     filterWord: 'Documents Word',
+    dlgDocImportFailed: 'Impossible de convertir ce fichier .doc',
+    docTextImportNotice: 'LibreOffice/Word introuvable — importé en texte brut. La mise en forme d\'origine (gras, tableaux, images…) est à refaire.',
     dlgSaveAs: 'Enregistrer sous',
     closeUnsavedMsg: 'Ce document contient des modifications non enregistrées.',
     closeUnsavedDetail: 'Voulez-vous les enregistrer avant de fermer ?',
@@ -580,6 +595,8 @@ const tMain = createI18n({
   de: {
     dlgOpenDoc: 'Dokument öffnen',
     filterWord: 'Word-Dokumente',
+    dlgDocImportFailed: 'Diese .doc-Datei konnte nicht konvertiert werden',
+    docTextImportNotice: 'LibreOffice/Word nicht gefunden — als Nur-Text importiert. Die ursprüngliche Formatierung (Fett, Tabellen, Bilder…) muss neu gesetzt werden.',
     dlgSaveAs: 'Speichern unter',
     closeUnsavedMsg: 'Dieses Dokument enthält ungespeicherte Änderungen.',
     closeUnsavedDetail: 'Vor dem Schließen speichern?',
@@ -676,6 +693,8 @@ const tMain = createI18n({
   es: {
     dlgOpenDoc: 'Abrir documento',
     filterWord: 'Documentos de Word',
+    dlgDocImportFailed: 'No se pudo convertir este archivo .doc',
+    docTextImportNotice: 'No se encontró LibreOffice/Word: importado como texto sin formato. El formato original (negrita, tablas, imágenes…) habrá que rehacerlo.',
     dlgSaveAs: 'Guardar como',
     closeUnsavedMsg: 'Este documento tiene cambios sin guardar.',
     closeUnsavedDetail: '¿Desea guardarlos antes de cerrar?',
@@ -771,6 +790,8 @@ const tMain = createI18n({
   th: {
     dlgOpenDoc: 'เปิดเอกสาร',
     filterWord: 'เอกสาร Word',
+    dlgDocImportFailed: 'แปลงไฟล์ .doc นี้ไม่สำเร็จ',
+    docTextImportNotice: 'ไม่พบ LibreOffice/Word — นำเข้าเป็นข้อความล้วน รูปแบบเดิม (ตัวหนา ตาราง รูปภาพ ฯลฯ) ต้องจัดใหม่',
     dlgSaveAs: 'บันทึกเป็น',
     closeUnsavedMsg: 'เอกสารนี้มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก',
     closeUnsavedDetail: 'ต้องการบันทึกก่อนปิดหรือไม่?',
@@ -865,6 +886,8 @@ const tMain = createI18n({
   id: {
     dlgOpenDoc: 'Buka Dokumen',
     filterWord: 'Dokumen Word',
+    dlgDocImportFailed: 'File .doc ini tidak dapat dikonversi',
+    docTextImportNotice: 'LibreOffice/Word tidak ditemukan — diimpor sebagai teks polos. Format asli (tebal, tabel, gambar…) perlu diformat ulang.',
     dlgSaveAs: 'Simpan Sebagai',
     closeUnsavedMsg: 'Dokumen ini memiliki perubahan yang belum disimpan.',
     closeUnsavedDetail: 'Simpan sebelum menutup?',
@@ -959,6 +982,8 @@ const tMain = createI18n({
   ru: {
     dlgOpenDoc: 'Открыть документ',
     filterWord: 'Документы Word',
+    dlgDocImportFailed: 'Не удалось преобразовать этот файл .doc',
+    docTextImportNotice: 'LibreOffice/Word не найдены — импортировано как обычный текст. Исходное форматирование (полужирный, таблицы, картинки…) нужно восстановить вручную.',
     dlgSaveAs: 'Сохранить как',
     closeUnsavedMsg: 'В этом документе есть несохранённые изменения.',
     closeUnsavedDetail: 'Сохранить их перед закрытием?',
@@ -1054,6 +1079,8 @@ const tMain = createI18n({
   ar: {
     dlgOpenDoc: 'فتح مستند',
     filterWord: 'مستندات Word',
+    dlgDocImportFailed: 'تعذّر تحويل ملف .doc هذا',
+    docTextImportNotice: 'لم يتم العثور على LibreOffice/Word — تم الاستيراد كنص عادي. التنسيق الأصلي (عريض، جداول، صور…) يحتاج إلى إعادة تنسيق.',
     dlgSaveAs: 'حفظ باسم',
     closeUnsavedMsg: 'يحتوي هذا المستند على تغييرات غير محفوظة.',
     closeUnsavedDetail: 'هل تريد حفظها قبل الإغلاق؟',
@@ -1149,6 +1176,8 @@ const tMain = createI18n({
   pt: {
     dlgOpenDoc: 'Abrir Documento',
     filterWord: 'Documentos do Word',
+    dlgDocImportFailed: 'Não foi possível converter este arquivo .doc',
+    docTextImportNotice: 'LibreOffice/Word não encontrado — importado como texto simples. A formatação original (negrito, tabelas, imagens…) precisa ser refeita.',
     dlgSaveAs: 'Salvar Como',
     closeUnsavedMsg: 'Este documento tem alterações não salvas.',
     closeUnsavedDetail: 'Deseja salvá-las antes de fechar?',
@@ -1244,6 +1273,8 @@ const tMain = createI18n({
   it: {
     dlgOpenDoc: 'Apri documento',
     filterWord: 'Documenti Word',
+    dlgDocImportFailed: 'Impossibile convertire questo file .doc',
+    docTextImportNotice: 'LibreOffice/Word non trovato — importato come testo semplice. La formattazione originale (grassetto, tabelle, immagini…) va rifatta.',
     dlgSaveAs: 'Salva con nome',
     closeUnsavedMsg: 'Questo documento contiene modifiche non salvate.',
     closeUnsavedDetail: 'Salvarle prima di chiudere?',
@@ -1339,6 +1370,8 @@ const tMain = createI18n({
   pl: {
     dlgOpenDoc: 'Otwórz dokument',
     filterWord: 'Dokumenty programu Word',
+    dlgDocImportFailed: 'Nie można przekonwertować tego pliku .doc',
+    docTextImportNotice: 'Nie znaleziono LibreOffice/Word — zaimportowano jako zwykły tekst. Oryginalne formatowanie (pogrubienie, tabele, obrazy…) trzeba odtworzyć.',
     dlgSaveAs: 'Zapisz jako',
     closeUnsavedMsg: 'Ten dokument zawiera niezapisane zmiany.',
     closeUnsavedDetail: 'Czy zapisać je przed zamknięciem?',
@@ -1434,6 +1467,8 @@ const tMain = createI18n({
   nl: {
     dlgOpenDoc: 'Document openen',
     filterWord: 'Word-documenten',
+    dlgDocImportFailed: 'Dit .doc-bestand kon niet worden geconverteerd',
+    docTextImportNotice: 'LibreOffice/Word niet gevonden — geïmporteerd als platte tekst. De oorspronkelijke opmaak (vet, tabellen, afbeeldingen…) moet opnieuw worden ingesteld.',
     dlgSaveAs: 'Opslaan als',
     closeUnsavedMsg: 'Dit document bevat niet-opgeslagen wijzigingen.',
     closeUnsavedDetail: 'Wilt u ze opslaan voordat u sluit?',
@@ -1529,6 +1564,8 @@ const tMain = createI18n({
   ms: {
     dlgOpenDoc: 'Buka Dokumen',
     filterWord: 'Dokumen Word',
+    dlgDocImportFailed: 'Fail .doc ini tidak dapat ditukar',
+    docTextImportNotice: 'LibreOffice/Word tidak ditemui — diimport sebagai teks kosong. Pemformatan asal (tebal, jadual, imej…) perlu diformat semula.',
     dlgSaveAs: 'Simpan Sebagai',
     closeUnsavedMsg: 'Dokumen ini mempunyai perubahan yang belum disimpan.',
     closeUnsavedDetail: 'Adakah anda mahu menyimpannya sebelum menutup?',
@@ -1624,6 +1661,8 @@ const tMain = createI18n({
   he: {
     dlgOpenDoc: 'פתיחת מסמך',
     filterWord: 'מסמכי Word',
+    dlgDocImportFailed: 'לא ניתן להמיר את קובץ ה-.doc הזה',
+    docTextImportNotice: 'LibreOffice/Word לא נמצא — יובא כטקסט פשוט. את העיצוב המקורי (מודגש, טבלאות, תמונות…) יש לעצב מחדש.',
     dlgSaveAs: 'שמירה בשם',
     closeUnsavedMsg: 'במסמך זה יש שינויים שלא נשמרו.',
     closeUnsavedDetail: 'האם לשמור אותם לפני הסגירה?',
@@ -1717,6 +1756,8 @@ const tMain = createI18n({
   hi: {
     dlgOpenDoc: 'दस्तावेज़ खोलें',
     filterWord: 'Word दस्तावेज़',
+    dlgDocImportFailed: 'यह .doc फ़ाइल बदली नहीं जा सकी',
+    docTextImportNotice: 'LibreOffice/Word नहीं मिला — सादे टेक्स्ट के रूप में आयात किया गया। मूल फ़ॉर्मैटिंग (बोल्ड, तालिकाएँ, चित्र…) दोबारा करनी होगी।',
     dlgSaveAs: 'इस रूप में सहेजें',
     closeUnsavedMsg: 'इस दस्तावेज़ में सहेजे नहीं गए परिवर्तन हैं।',
     closeUnsavedDetail: 'क्या आप बंद करने से पहले उन्हें सहेजना चाहते हैं?',
@@ -1812,6 +1853,8 @@ const tMain = createI18n({
   'zh-TW': {
     dlgOpenDoc: '開啟文件',
     filterWord: 'Word 文件',
+    dlgDocImportFailed: '無法轉換此 .doc 檔案',
+    docTextImportNotice: '未找到 LibreOffice/Word，已按純文字匯入——原格式（粗體、表格、圖片等）需重新排版。',
     dlgSaveAs: '另存新檔',
     closeUnsavedMsg: '此文件有未儲存的變更。',
     closeUnsavedDetail: '關閉前是否要儲存？',
@@ -2000,13 +2043,13 @@ export function uniquePathIn(dir: string, fileName: string): string {
 }
 
 export function openExternalDocx(filePath: string | null): void {
-  if (!filePath || !/\.docx$/i.test(filePath)) return
+  if (!filePath || !/\.docx?$/i.test(filePath)) return
   const win = BrowserWindow.getFocusedWindow() ?? mainWindow
   if (!rendererReady || !win) {
     pendingOpenPath = filePath
     return
   }
-  void loadDocx(filePath, win.webContents.id)
+  void openDocumentPath(filePath, win.webContents.id)
     .then((result) => {
       if (!result || win.isDestroyed()) return
       if (win.isMinimized()) win.restore()
@@ -2383,6 +2426,32 @@ async function loadDocx(
     encrypted,
     recovered: recovered || undefined,
   }
+}
+
+/** One entry for both formats: .docx goes straight in; a legacy .doc is
+ * converted next to itself first (`report.doc` → `report.docx`, see
+ * doc-convert.ts) and the converted copy is opened. Conversion failure
+ * surfaces as an error dialog and resolves null. */
+async function openDocumentPath(
+  filePath: string,
+  wcId: number,
+  password?: string,
+): Promise<OpenDocxResult> {
+  if (!isLegacyDocPath(filePath)) return loadDocx(filePath, wcId, password)
+  try {
+    const outcome = await convertLegacyDoc(filePath)
+    if (outcome.via === 'text') {
+      // last-resort import: tell the user formatting was not preserved
+      const parent = BrowserWindow.getFocusedWindow() ?? mainWindow
+      const options = { type: 'info' as const, message: tm('docTextImportNotice') }
+      if (parent && !parent.isDestroyed()) void dialog.showMessageBox(parent, options)
+      else void dialog.showMessageBox(options)
+    }
+  } catch (err) {
+    dialog.showErrorBox(tm('dlgDocImportFailed'), String(err))
+    return null
+  }
+  return loadDocx(docxTargetFor(filePath), wcId, password)
 }
 
 // ---- IPC ----
@@ -2833,14 +2902,16 @@ export function registerDocsIpc(): void {
   ipcMain.handle('docs:open', async (event) => {
     const result = await openDialog(event, {
       title: tm('dlgOpenDoc'),
-      filters: [{ name: tm('filterWord'), extensions: ['docx'] }],
+      filters: [{ name: tm('filterWord'), extensions: ['docx', 'doc'] }],
       properties: ['openFile'],
     })
     if (result.canceled || result.filePaths.length === 0) return null
-    return loadDocx(result.filePaths[0], event.sender.id)
+    return openDocumentPath(result.filePaths[0], event.sender.id)
   })
 
-  ipcMain.handle('docs:open-path', (event, filePath: string) => loadDocx(filePath, event.sender.id))
+  ipcMain.handle('docs:open-path', (event, filePath: string) =>
+    openDocumentPath(filePath, event.sender.id),
+  )
 
   // Review > Protect > Encrypt with Password: set/clear the open password.
   // Takes effect on the next save (docs:save / save-as / save-new all consult the store).
@@ -2902,17 +2973,17 @@ export function registerDocsIpc(): void {
     },
   )
 
-  ipcMain.handle('docs:consume-pending-open', (event) => {
+  ipcMain.handle('docs:consume-pending-open', async (event) => {
     rendererReady = true
     // a tab spawned via New Tab loads the document queued for it specifically
     const queued = pendingWindowOpens.get(event.sender.id)
     if (queued) {
       pendingWindowOpens.delete(event.sender.id)
-      return loadDocx(queued, event.sender.id)
+      return openDocumentPath(queued, event.sender.id)
     }
     const filePath = pendingOpenPath
     pendingOpenPath = null
-    return filePath ? loadDocx(filePath, event.sender.id) : null
+    return filePath ? openDocumentPath(filePath, event.sender.id) : null
   })
 
   /** returns true when this tab was opened via "New Document" and should start blank */

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { t } from '../src/renderer/i18n/locale'
+import {
+  buildActiveSheetPdfPayload,
+  type PageLayoutContext,
+} from '../src/renderer/page-layout-actions'
 import { buildSheetPrintPayload, renderHeaderFooterHtml } from '../src/renderer/print-html'
 import {
   decodeHeaderFooter,
@@ -8,6 +13,7 @@ import {
   resolveEffectivePageSetup,
   type EffectivePageSetup,
 } from '../src/renderer/print-settings'
+import type { LazyWorkbookState, UniverRuntime } from '../src/renderer/univer-state'
 import type { PrintWorksheet } from '../src/renderer/print-html'
 
 describe('decodeHeaderFooter', () => {
@@ -168,6 +174,26 @@ describe('resolveEffectivePageSetup', () => {
     expect(setup.printAreas).toEqual([])
   })
 
+  it('lets custom journal margins win over the file and clamps them', () => {
+    const setup = resolveEffectivePageSetup(
+      {
+        margins: { left: 0.4, right: 0.6, top: 0.9, bottom: 0.8, header: 0.2, footer: 9 },
+      },
+      {
+        margins: { left: 1, right: 1, top: 1, bottom: 1, header: 0.5, footer: 0.5 },
+      },
+      null,
+    )
+    expect(setup.margins).toEqual({
+      left: 0.4,
+      right: 0.6,
+      top: 0.9,
+      bottom: 0.8,
+      header: 0.2,
+      footer: 3, // clamped to the export wire's 3in cap
+    })
+  })
+
   it('defaults fitToWidth to one page when the file only sets fitToPage', () => {
     const setup = resolveEffectivePageSetup({}, { fitToPage: true }, null)
     expect(setup.fitToPage).toBe(true)
@@ -291,6 +317,54 @@ function payloadSetup(overrides: Partial<EffectivePageSetup>): EffectivePageSetu
   }
 }
 
+/// Fakes for buildActiveSheetPdfPayload: the sheet is fakeWorksheet() plus
+/// the identity accessors the payload builder reads before the layout.
+function fakeSheet(overrides: Partial<PrintWorksheet> = {}): PrintWorksheet {
+  return {
+    ...fakeWorksheet(),
+    getSheetId: () => 'sheet-1',
+    getSheetName: () => 'Sheet1',
+    ...overrides,
+  } as PrintWorksheet
+}
+
+function fakeRuntime(sheet: PrintWorksheet | null): UniverRuntime {
+  return {
+    univerAPI: {
+      getActiveWorkbook: () => (sheet === null ? null : { getActiveSheet: () => sheet }),
+    },
+  } as unknown as UniverRuntime
+}
+
+function fakeState(printAreaFormulas: string[]): LazyWorkbookState {
+  return {
+    flags: { preloadComplete: true },
+    file: {
+      name: 'Book1.xlsx',
+      sheets: printAreaFormulas.map((printArea, index) => ({
+        id: 'sheet-1',
+        name: `S${index + 1}`,
+        printArea,
+      })),
+    },
+    editJournal: { pageSetup: new Map(), structuralOps: new Map() },
+    sheetFilePageSetups: new Map(),
+  } as unknown as LazyWorkbookState
+}
+
+function fakeContext(
+  messages: string[],
+  sheet: PrintWorksheet | null = null,
+  state: LazyWorkbookState | null = null,
+): PageLayoutContext {
+  return {
+    univerRef: { current: sheet === null ? null : fakeRuntime(sheet) },
+    lazyWorkbookRef: { current: state },
+    setMessage: (message: string) => messages.push(message),
+    setPendingEdits: () => {},
+  }
+}
+
 describe('buildSheetPrintPayload', () => {
   it('crops the layout to the print area', () => {
     const payload = buildSheetPrintPayload(
@@ -351,5 +425,54 @@ describe('buildSheetPrintPayload', () => {
       'S1',
     )
     expect(payload.scale).toBe(1)
+  })
+})
+
+describe('buildActiveSheetPdfPayload', () => {
+  it('builds the payload from the active sheet', () => {
+    const messages: string[] = []
+    const payload = buildActiveSheetPdfPayload(fakeContext(messages, fakeSheet()))
+    expect(payload).not.toBeNull()
+    expect(payload?.fileName).toBe('Book1.pdf')
+    expect(payload?.html).toContain('A1')
+    expect(messages).toEqual([])
+  })
+
+  it('reports an oversized print area instead of failing silently', () => {
+    const messages: string[] = []
+    const context = fakeContext(
+      messages,
+      fakeSheet(),
+      // 26 x 2000 = 52,000 used cells — past MAX_PRINT_CELLS the layout
+      // throws PrintError; the payload builder must catch it and set the
+      // localized message (an uncaught throw used to kill the click with
+      // no reaction).
+      fakeState(["'Sheet1'!$A$1:$Z$2000"]),
+    )
+    const payload = buildActiveSheetPdfPayload(context)
+    expect(payload).toBeNull()
+    expect(messages).toEqual([t('appPrintTooLarge')])
+  })
+
+  it('reports the missing active sheet', () => {
+    const messages: string[] = []
+    const payload = buildActiveSheetPdfPayload(fakeContext(messages, null))
+    expect(payload).toBeNull()
+    expect(messages).toEqual([t('appActiveSheetUnavailable')])
+  })
+
+  it('falls back to the generic message for unexpected errors', () => {
+    const messages: string[] = []
+    const context = fakeContext(
+      messages,
+      fakeSheet({
+        getMergedRanges: () => {
+          throw new TypeError('facade blew up')
+        },
+      }),
+    )
+    const payload = buildActiveSheetPdfPayload(context)
+    expect(payload).toBeNull()
+    expect(messages).toEqual([t('appPdfExportFailed')])
   })
 })

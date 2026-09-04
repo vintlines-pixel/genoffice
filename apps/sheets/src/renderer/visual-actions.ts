@@ -4,6 +4,7 @@
  * refs and state never go stale.
  */
 import { columnLabel, parseAddress, parseRange } from '../domain/cell-address'
+import { downscaleImageDataUrl } from '@genoffice/ui'
 import {
   hasNumericYearAxis,
   recommendCharts,
@@ -534,32 +535,37 @@ export function insertAiImageVisual(
 ): void {
   const workbook = runtime.univerAPI.getActiveWorkbook()
   if (!workbook?.getSheetBySheetId(op.sheetId)) throw new Error(`Unknown sheet: ${op.sheetId}`)
-  // ~80px per column, ~22px per row; scale down to a ≤480px-wide frame
-  // (same sizing as the picker-based insert).
-  const scale = Math.min(1, 480 / Math.max(1, image.width))
-  const columns = Math.min(16, Math.max(2, Math.round((image.width * scale) / 80)))
-  const rows = Math.min(40, Math.max(2, Math.round((image.height * scale) / 22)))
-  const base = parseAddress(op.anchorCell)
-  const visual: WorkbookVisualObject = {
-    id: `added-image-${Date.now().toString(36)}-${state.editJournal.visualAdds.length + 1}`,
-    sheetId: op.sheetId,
-    kind: 'image',
-    anchor: {
-      fromRow: base.row,
-      fromColumn: base.column,
-      fromRowOffset: 0,
-      fromColumnOffset: 0,
-      toRow: base.row + rows,
-      toColumn: base.column + columns,
-      toRowOffset: 0,
-      toColumnOffset: 0,
-    },
-    mediaType: image.mediaType,
-    mediaDataUrl: image.dataUrl,
-    name: op.path.split('/').pop() ?? 'image',
-  }
-  pushVisualAddUndo(ctx, runtime, state, visual)
-  queueCtxVisualInstall(ctx, runtime)
+  // bounds the inserted image so the grid does not re-decode a multi-MB frame
+  void downscaleImageDataUrl(image.dataUrl).then((scaled) => {
+    const width = scaled.width || image.width
+    const height = scaled.height || image.height
+    // ~80px per column, ~22px per row; scale down to a ≤480px-wide frame
+    // (same sizing as the picker-based insert).
+    const scale = Math.min(1, 480 / Math.max(1, width))
+    const columns = Math.min(16, Math.max(2, Math.round((width * scale) / 80)))
+    const rows = Math.min(40, Math.max(2, Math.round((height * scale) / 22)))
+    const base = parseAddress(op.anchorCell)
+    const visual: WorkbookVisualObject = {
+      id: `added-image-${Date.now().toString(36)}-${state.editJournal.visualAdds.length + 1}`,
+      sheetId: op.sheetId,
+      kind: 'image',
+      anchor: {
+        fromRow: base.row,
+        fromColumn: base.column,
+        fromRowOffset: 0,
+        fromColumnOffset: 0,
+        toRow: base.row + rows,
+        toColumn: base.column + columns,
+        toRowOffset: 0,
+        toColumnOffset: 0,
+      },
+      mediaType: image.mediaType,
+      mediaDataUrl: scaled.dataUrl,
+      name: op.path.split('/').pop() ?? 'image',
+    }
+    pushVisualAddUndo(ctx, runtime, state, visual)
+    queueCtxVisualInstall(ctx, runtime)
+  })
 }
 
 /// AI edit_shape: in-place journal update of a session-added shape,
@@ -678,19 +684,23 @@ export function handleInsertPicture(ctx: VisualActionContext): void {
       return
     }
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       const dataUrl = typeof reader.result === 'string' ? reader.result : null
       if (!dataUrl) return
       const image = new Image()
-      image.onload = () =>
+      image.onload = async () => {
+        // bounds the picker-inserted image: a multi-MB screenshot otherwise
+        // re-decodes across grid layout/paint and freezes the sheet
+        const scaled = await downscaleImageDataUrl(dataUrl)
         insertPictureVisual(
           ctx,
-          dataUrl,
+          scaled.dataUrl,
           mediaType,
           file.name,
-          image.naturalWidth,
-          image.naturalHeight,
+          scaled.width || image.naturalWidth,
+          scaled.height || image.naturalHeight,
         )
+      }
       image.onerror = () => insertPictureVisual(ctx, dataUrl, mediaType, file.name, 480, 320)
       image.src = dataUrl
     }

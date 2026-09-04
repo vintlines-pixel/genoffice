@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fetchRemoteImage, remoteImageHeaders } from '../src/remote-image'
+import type { DnsLookup } from '../src/safe-remote-url'
 
 const png = () => new Response('img', { status: 200 })
+
+/// Stub DNS so the SSRF host check resolves instantly (a real lookup hangs on
+/// offline/blocked machines). 1.2.3.4 is a public address → host passes.
+const publicLookup: DnsLookup = async () => [{ address: '1.2.3.4', family: 4 }]
 
 describe('remoteImageHeaders', () => {
   it('sends a Referer for genspark hosts', () => {
@@ -34,6 +39,7 @@ describe('fetchRemoteImage', () => {
     const fetchImpl = vi.fn().mockResolvedValue(png())
     const resp = await fetchRemoteImage('https://sspark.genspark.ai/a.png', {
       fetchImpl,
+      lookupImpl: publicLookup,
       retryDelaysMs: [0, 0],
     })
     expect(resp?.ok).toBe(true)
@@ -50,6 +56,7 @@ describe('fetchRemoteImage', () => {
       .mockResolvedValueOnce(png())
     const resp = await fetchRemoteImage('https://sspark.genspark.ai/a.png', {
       fetchImpl,
+      lookupImpl: publicLookup,
       retryDelaysMs: [0, 0],
     })
     expect(resp?.ok).toBe(true)
@@ -60,6 +67,7 @@ describe('fetchRemoteImage', () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNRESET'))
     const resp = await fetchRemoteImage('https://sspark.genspark.ai/a.png', {
       fetchImpl,
+      lookupImpl: publicLookup,
       retryDelaysMs: [0],
     })
     expect(resp).toBeNull()
@@ -70,6 +78,7 @@ describe('fetchRemoteImage', () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response('gone', { status: 404 }))
     const resp = await fetchRemoteImage('https://sspark.genspark.ai/a.png', {
       fetchImpl,
+      lookupImpl: publicLookup,
       retryDelaysMs: [0, 0],
     })
     expect(resp?.status).toBe(404)

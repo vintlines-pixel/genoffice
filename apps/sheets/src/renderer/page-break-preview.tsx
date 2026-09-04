@@ -44,7 +44,11 @@ export function printablePagePt(pageSetup: PageSetupJournalState): {
   height: number
 } {
   const paper = PAPER_INCHES[pageSetup.paperSize ?? 9] ?? PAPER_INCHES[9]!
-  const margins = MARGIN_PRESETS[pageSetup.margins ?? 'normal']
+  // A preset name resolves through the table; custom margins carry their
+  // own inch values (header/footer margins don't affect page size).
+  const margins = typeof pageSetup.margins === 'object'
+    ? pageSetup.margins
+    : MARGIN_PRESETS[pageSetup.margins ?? 'normal']
   const landscape = pageSetup.orientation === 'landscape'
   const width = (landscape ? paper.height : paper.width) - margins.left - margins.right
   const height = (landscape ? paper.width : paper.height) - margins.top - margins.bottom

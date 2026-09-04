@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { numberFormatCategories } from '../src/renderer/number-format'
 import { getSystemShortDate, setSystemShortDate } from '../src/shared/short-date'
 import {
+  COMMON_CURRENCIES,
   DATE_PATTERNS,
   datePatterns,
   DEFAULT_NUMFMT_OPTIONS,
@@ -73,6 +74,19 @@ describe('round-trip', () => {
         expect(parsed).toMatchObject({ category: 'currency', symbol, negative, decimals: 2 })
       }
     }
+  })
+
+  it('currency: every common-currency symbol round-trips', () => {
+    for (const { symbol } of COMMON_CURRENCIES) {
+      const input = options({ category: 'currency', symbol, decimals: 2 })
+      const parsed = numfmtOptionsOf(numfmtPattern(input))
+      expect(parsed).toMatchObject({ category: 'currency', symbol, decimals: 2 })
+    }
+  })
+
+  it('common-currency symbols are unique (Picker option values must not collide)', () => {
+    const symbols = COMMON_CURRENCIES.map((currency) => currency.symbol)
+    expect(new Set(symbols).size).toBe(symbols.length)
   })
 
   it('accounting: symbols × decimals', () => {

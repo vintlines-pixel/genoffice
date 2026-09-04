@@ -6,7 +6,12 @@
  */
 import { columnLabel, parseRange } from '../domain/cell-address'
 import type { WorkbookPagePrintSettings } from '../shared/desktop-api'
-import type { HeaderFooterParts, PageSetupJournalState, StructuralJournalOp } from './edit-journal'
+import type {
+  CustomMargins,
+  HeaderFooterParts,
+  PageSetupJournalState,
+  StructuralJournalOp,
+} from './edit-journal'
 import { fileRangeToScreenRange, fileToScreen } from './view-transform'
 
 export interface PrintMargins {
@@ -45,6 +50,22 @@ const MARGIN_PRESETS: Record<'normal' | 'wide' | 'narrow', PrintMargins> = {
   normal: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 },
   wide: { left: 1, right: 1, top: 1, bottom: 1, header: 0.5, footer: 0.5 },
   narrow: { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 },
+}
+
+/// The fallback when neither the session nor the file declares margins.
+export const NORMAL_MARGINS: PrintMargins = MARGIN_PRESETS.normal
+
+/// Custom margins → concrete values clamped like file-side margins.
+function clampCustomMargins(margins: CustomMargins): PrintMargins {
+  const clampMargin = (value: number): number => Math.min(Math.max(value, 0), MAX_MARGIN_INCHES)
+  return {
+    left: clampMargin(margins.left),
+    right: clampMargin(margins.right),
+    top: clampMargin(margins.top),
+    bottom: clampMargin(margins.bottom),
+    header: clampMargin(margins.header),
+    footer: clampMargin(margins.footer),
+  }
 }
 
 /// The export wire caps margins at 3in per side.
@@ -114,9 +135,8 @@ export function resolveEffectivePageSetup(
   const clampMargin = (value: number): number => Math.min(Math.max(value, 0), MAX_MARGIN_INCHES)
   const fileMargins = file?.margins
   const margins =
-    journal.margins !== undefined
-      ? MARGIN_PRESETS[journal.margins]
-      : fileMargins !== undefined
+    journal.margins === undefined
+      ? fileMargins !== undefined
         ? {
             left: clampMargin(fileMargins.left),
             right: clampMargin(fileMargins.right),
@@ -125,7 +145,10 @@ export function resolveEffectivePageSetup(
             header: clampMargin(fileMargins.header),
             footer: clampMargin(fileMargins.footer),
           }
-        : MARGIN_PRESETS.normal
+        : NORMAL_MARGINS
+      : typeof journal.margins === 'string'
+        ? MARGIN_PRESETS[journal.margins]
+        : clampCustomMargins(journal.margins)
   const fitToPage = journal.fitToPage ?? file?.fitToPage ?? false
   // OOXML default when fitToPage is on and fitToWidth absent is 1 page.
   const fitToWidth = journal.fitToWidth ?? file?.fitToWidth ?? (file?.fitToPage === true ? 1 : 0)

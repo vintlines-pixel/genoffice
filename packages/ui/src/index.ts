@@ -21,6 +21,13 @@ export { Markdown, type MarkdownNav } from './Markdown'
 export { isSymbolFontFamily } from './symbol-fonts'
 export { BUILTIN_FONT_FAMILIES, fontFamiliesFor } from './font-list'
 export {
+  MAX_INSERT_IMAGE_DIM,
+  fitImageDim,
+  downscaleImageDataUrl,
+  type DownscaledImage,
+  type FittedImage,
+} from './image-downscale'
+export {
   WORDART_PRESETS,
   wordArtSolidColor,
   wordArtStrokePx,

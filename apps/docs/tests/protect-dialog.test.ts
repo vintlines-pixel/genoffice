@@ -41,12 +41,13 @@ async function mount(partial: Partial<Props>) {
       ;(el as HTMLElement).click()
     })
   }
-  // submit hashes/verifies passwords asynchronously (iterated SHA-512); keep
-  // flushing until the expected outcome shows up instead of guessing a delay
+  // submit hashes/verifies passwords asynchronously (100k iterations of
+  // SHA-512 — Word's spinCount), which can take >10s under full-suite CPU
+  // load; keep flushing until the expected outcome shows up.
   const submit = async (done: () => boolean) => {
     await click(host.querySelector('.btn-primary')!)
     const start = Date.now()
-    while (!done() && Date.now() - start < 10_000) {
+    while (!done() && Date.now() - start < 30_000) {
       await act(async () => {
         await new Promise((r) => setTimeout(r, 10))
       })

@@ -1,5 +1,7 @@
 import JSZip from 'jszip'
 
+import { escapeXmlText } from './xml-utils'
+
 /**
  * Blank document template for "new document" and AI from-scratch generation.
  *
@@ -148,6 +150,11 @@ export interface BlankDocxOptions {
    * Word/our renderer then substitute per script when CJK text appears.
    */
   eastAsiaFont?: string
+  /**
+   * Initial body paragraphs (plain text; XML-escaped here). Empty/omitted
+   * keeps the single empty paragraph. Used by the legacy-.doc text import.
+   */
+  paragraphs?: readonly string[]
 }
 
 /** Build a minimal valid .docx: one empty paragraph, A4 portrait, standard styles. */
@@ -187,9 +194,18 @@ export async function buildBlankDocx(options?: BlankDocxOptions): Promise<Uint8A
     '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
     '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>' +
     '</w:sectPr>'
+  const paragraphs =
+    options?.paragraphs && options.paragraphs.length > 0
+      ? options.paragraphs
+          .map(
+            (text) =>
+              `<w:p><w:r><w:t xml:space="preserve">${escapeXmlText(text)}</w:t></w:r></w:p>`,
+          )
+          .join('')
+      : '<w:p/>'
   zip.file(
     'word/document.xml',
-    `${XML_DECL}<w:document ${DOC_NS}><w:body><w:p/>${sectPr}</w:body></w:document>`,
+    `${XML_DECL}<w:document ${DOC_NS}><w:body>${paragraphs}${sectPr}</w:body></w:document>`,
   )
 
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })

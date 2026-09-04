@@ -206,6 +206,17 @@ export interface HeaderFooterParts {
   readonly right?: string
 }
 
+/// Custom print margins in inches (Excel's Page Setup → Margins dialog);
+/// `header`/`footer` measure from the paper's top/bottom edge.
+export interface CustomMargins {
+  readonly left: number
+  readonly right: number
+  readonly top: number
+  readonly bottom: number
+  readonly header: number
+  readonly footer: number
+}
+
 export interface PageSetupJournalState {
   orientation?: 'portrait' | 'landscape'
   /// OOXML paper-size code (1 = Letter, 9 = A4, …).
@@ -216,7 +227,8 @@ export interface PageSetupJournalState {
   fitToHeight?: number
   /// Scale and fit are exclusive; whichever the user touched last wins.
   fitToPage?: boolean
-  margins?: 'normal' | 'wide' | 'narrow'
+  /// A preset name or explicit inch values (Margins → Custom Margins).
+  margins?: 'normal' | 'wide' | 'narrow' | CustomMargins
   printGridlines?: boolean
   printHeadings?: boolean
   showGridlines?: boolean

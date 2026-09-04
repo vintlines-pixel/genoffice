@@ -100,7 +100,7 @@ import { IPC_CHANNELS } from '../shared/ipc-channels'
 import { atomicWriteFile } from './atomic-write'
 import { closeGuardDecision } from './close-guard'
 import { SaveEditsTransferStore } from './save-edits-transfer'
-import { exportPdf } from './pdf-export'
+import { exportPdf, previewPdf } from './pdf-export'
 import { allowsAutomaticWorkbookRecovery } from './recovery-policy'
 import { setSystemShortDate, shortDatePatternForSystemLocale } from '../shared/short-date'
 import {
@@ -2365,6 +2365,12 @@ export function registerSheetsIpc(): void {
     const result = await exportPdf(event, request)
     if (!result.canceled && result.path) openExportedPdf(result.path)
     return result
+  })
+
+  ipcMain.handle(IPC_CHANNELS.previewPdf, async (event, input: unknown) => {
+    sessionFor(event)
+    const request = workbookExportPdfRequestSchema.parse(input)
+    return previewPdf(request)
   })
 
   ipcMain.handle(IPC_CHANNELS.exportCsv, async (event, input: unknown) => {

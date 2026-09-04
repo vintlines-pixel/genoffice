@@ -6,12 +6,14 @@
  * page-layout view), everything lands in the saved file.
  */
 import { columnLabel } from '../domain/cell-address'
+import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
 import {
   isSheetRemoved,
   journalSize,
   recordPageSetup,
   recordThemeColors,
   recordThemeFonts,
+  type CustomMargins,
   type PageSetupJournalState,
 } from './edit-journal'
 import type { HeaderFooterResult } from './HeaderFooterDialog'
@@ -19,8 +21,8 @@ import { t } from './i18n/locale'
 import { effectivePageBreaks } from './page-break-preview'
 import { COLOR_SCHEMES, FONT_SCHEMES, rethemeStyles, THEME_PRESETS } from './themes'
 import { loadVisibleRange } from './univer-sync'
-import { buildSheetPrintPayload, type PrintWorksheet } from './print-html'
-import { resolveEffectivePageSetup } from './print-settings'
+import { buildSheetPrintPayload, PrintError, type PrintWorksheet } from './print-html'
+import { resolveEffectivePageSetup, type EffectivePageSetup } from './print-settings'
 import type { LazyWorkbookState, UniverRuntime } from './univer-state'
 
 const PAPER_NAMES: Record<string, string> = {
@@ -268,6 +270,29 @@ export function handlePageLayoutCommand(ctx: PageLayoutContext, rest: string): v
   }
 }
 
+/// Effective page setup of one sheet: the session's page-setup journal
+/// overlaid on the file's saved settings (print areas/titles shifted into
+/// screen space). Shared by the PDF export and the header/footer and
+/// margins dialogs, whose prefills must reflect what the next save/print
+/// would use — not just this session's edits.
+export function resolveSheetEffectiveSetup(
+  state: LazyWorkbookState,
+  sheetId: string,
+): EffectivePageSetup {
+  const journal = state.editJournal.pageSetup.get(sheetId) ?? {}
+  const fileSetup = state.sheetFilePageSetups.get(sheetId) ?? null
+  const fileSheet = state.file.sheets.find((sheet) => sheet.id === sheetId)
+  return resolveEffectivePageSetup(
+    journal,
+    fileSetup,
+    {
+      ...(fileSheet?.printArea === undefined ? {} : { printArea: fileSheet.printArea }),
+      ...(fileSheet?.printTitles === undefined ? {} : { printTitles: fileSheet.printTitles }),
+    },
+    state.editJournal.structuralOps.get(sheetId) ?? [],
+  )
+}
+
 /// Insert → Header & Footer OK: journals the printed header/footer of the
 /// active sheet; the save writes the worksheet's <headerFooter> element.
 export function handleApplyHeaderFooter(
@@ -289,38 +314,86 @@ export function handleApplyHeaderFooter(
   return null
 }
 
-/// Lays the active sheet out as HTML with its Page Layout settings and asks
-/// the main process to render the PDF (hidden window + save dialog).
-export async function handleExportPdf(ctx: PageLayoutContext): Promise<void> {
+/// Custom Margins dialog OK: journals the six inch values of the active
+/// sheet (rounded to 3 decimals so no float noise reaches the file).
+export function handleApplyCustomMargins(
+  ctx: PageLayoutContext,
+  margins: CustomMargins,
+): string | null {
+  const state = ctx.lazyWorkbookRef.current
+  if (!state) return t('appHfNeedsFile')
+  const sheetId = ctx.univerRef.current?.univerAPI
+    .getActiveWorkbook()
+    ?.getActiveSheet()
+    ?.getSheetId()
+  if (!sheetId || isSheetRemoved(state.editJournal, sheetId)) {
+    return t('appActiveSheetUnavailable')
+  }
+  const round = (value: number): number => Math.round(value * 1_000) / 1_000
+  recordPageSetup(state.editJournal, sheetId, {
+    margins: {
+      left: round(margins.left),
+      right: round(margins.right),
+      top: round(margins.top),
+      bottom: round(margins.bottom),
+      header: round(margins.header),
+      footer: round(margins.footer),
+    },
+  })
+  ctx.setPendingEdits(journalSize(state.editJournal))
+  ctx.setMessage(t('appPageSetupRecorded', { note: t('appMarginCustomEcho') }))
+  ctx.refreshPageBreakPreview?.()
+  return null
+}
+
+/// Builds the active sheet's print payload for the Export-PDF dialog
+/// (preview and export share it). Returns null after setting a message on
+/// any failure (no active sheet, the workbook still preloading, the
+/// print-layout checks — too many cells, bad print area, ... — or an
+/// unexpected error); without the catch failures used to die silently in
+/// the click handler and the dialog would never open.
+export function buildActiveSheetPdfPayload(
+  ctx: PageLayoutContext,
+): WorkbookExportPdfRequest | null {
   const runtime = ctx.univerRef.current
   const worksheet = runtime?.univerAPI.getActiveWorkbook()?.getActiveSheet()
-  if (!runtime || !worksheet) return
+  if (!runtime || !worksheet) {
+    ctx.setMessage(t('appActiveSheetUnavailable'))
+    return null
+  }
   const state = ctx.lazyWorkbookRef.current
   if (state && !state.flags.preloadComplete) {
     ctx.setMessage(t('appPdfNeedsFullLoad'))
-    return
+    return null
   }
+  const sheetId = worksheet.getSheetId()
+  const setup = state
+    ? resolveSheetEffectiveSetup(state, sheetId)
+    : resolveEffectivePageSetup({}, null, null)
+  const baseName = (state?.file.name ?? 'Book1').replace(/\.[^.]+$/, '')
   try {
-    const sheetId = worksheet.getSheetId()
-    const journal = state?.editJournal.pageSetup.get(sheetId) ?? {}
-    const fileSetup = state?.sheetFilePageSetups.get(sheetId) ?? null
-    const fileSheet = state?.file.sheets.find((sheet) => sheet.id === sheetId)
-    const setup = resolveEffectivePageSetup(
-      journal,
-      fileSetup,
-      {
-        ...(fileSheet?.printArea === undefined ? {} : { printArea: fileSheet.printArea }),
-        ...(fileSheet?.printTitles === undefined ? {} : { printTitles: fileSheet.printTitles }),
-      },
-      state?.editJournal.structuralOps.get(sheetId) ?? [],
-    )
-    const baseName = (state?.file.name ?? 'Book1').replace(/\.[^.]+$/, '')
-    const payload = buildSheetPrintPayload(
+    return buildSheetPrintPayload(
       worksheet as unknown as PrintWorksheet,
       setup,
       `${baseName}.pdf`,
       worksheet.getSheetName(),
     )
+  } catch (error: unknown) {
+    // PrintError messages are already localized (built with t() at the
+    // throw site); anything else still gets visible feedback instead of a
+    // dead click, with the detail on the console for diagnosis.
+    console.error('Export PDF: building the print payload failed', error)
+    ctx.setMessage(error instanceof PrintError ? error.message : t('appPdfExportFailed'))
+    return null
+  }
+}
+
+/// Exports the (dialog-adjusted) payload: renders the PDF and opens it.
+export async function exportPdfPayload(
+  ctx: PageLayoutContext,
+  payload: WorkbookExportPdfRequest,
+): Promise<void> {
+  try {
     ctx.setMessage(t('appPdfRendering'))
     const result = await window.desktopApi.exportPdf(payload)
     ctx.setMessage(

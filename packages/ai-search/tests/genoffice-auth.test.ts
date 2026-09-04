@@ -109,7 +109,11 @@ describe('startGenofficeLogin', () => {
       key_id: 'kid-1',
       access_token: 'bearer-token',
     })
-    expect(statSync(genofficeAuthPath()).mode & 0o777).toBe(0o600)
+    // owner-only mode is a POSIX guarantee; Windows never reports 0o600 from
+    // mode bits (file ACLs govern there), so the strict check is POSIX-only.
+    if (process.platform !== 'win32') {
+      expect(statSync(genofficeAuthPath()).mode & 0o777).toBe(0o600)
+    }
     expect(genofficeApiKey()).toBe('gsk-genoffice-key')
     expect(genofficeLoginInFlight()).toBe(false)
 

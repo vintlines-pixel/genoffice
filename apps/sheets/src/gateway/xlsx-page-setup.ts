@@ -16,6 +16,17 @@ export interface HeaderFooterParts {
   readonly right?: string | undefined
 }
 
+/// Custom print margins in inches; `header`/`footer` measure from the
+/// paper's top/bottom edge.
+export interface CustomMargins {
+  readonly left: number
+  readonly right: number
+  readonly top: number
+  readonly bottom: number
+  readonly header: number
+  readonly footer: number
+}
+
 export interface SheetPageSetupState {
   readonly sheetName: string
   readonly orientation?: 'portrait' | 'landscape' | undefined
@@ -24,7 +35,7 @@ export interface SheetPageSetupState {
   readonly fitToWidth?: number | undefined
   readonly fitToHeight?: number | undefined
   readonly fitToPage?: boolean | undefined
-  readonly margins?: 'normal' | 'wide' | 'narrow' | undefined
+  readonly margins?: 'normal' | 'wide' | 'narrow' | CustomMargins | undefined
   readonly printGridlines?: boolean | undefined
   readonly printHeadings?: boolean | undefined
   readonly showGridlines?: boolean | undefined
@@ -347,17 +358,17 @@ export function applyPageSetupState(worksheetXml: string, state: SheetPageSetupS
   }
 
   if (state.margins !== undefined) {
-    const preset = MARGIN_PRESETS[state.margins]
+    const values = typeof state.margins === 'object' ? state.margins : MARGIN_PRESETS[state.margins]
     xml = mergeElementAttrs(
       xml,
       'pageMargins',
       {
-        left: String(preset.left),
-        right: String(preset.right),
-        top: String(preset.top),
-        bottom: String(preset.bottom),
-        header: String(preset.header),
-        footer: String(preset.footer),
+        left: String(values.left),
+        right: String(values.right),
+        top: String(values.top),
+        bottom: String(values.bottom),
+        header: String(values.header),
+        footer: String(values.footer),
       },
       /<pageSetup\b|<headerFooter\b|<rowBreaks\b|<colBreaks\b|<drawing\b|<legacyDrawing\b|<picture\b|<oleObjects\b|<tableParts\b|<extLst\b/,
     )

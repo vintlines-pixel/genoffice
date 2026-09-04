@@ -44,7 +44,9 @@ import { SubtotalDialog, type SubtotalConfig } from './SubtotalDialog'
 import { ConsolidateDialog } from './ConsolidateDialog'
 import type { ConsolidateConfig } from './consolidate'
 import { HeaderFooterDialog, type HeaderFooterResult } from './HeaderFooterDialog'
-import type { HeaderFooterParts } from './edit-journal'
+import { MarginsDialog } from './MarginsDialog'
+import type { CustomMargins, HeaderFooterParts } from './edit-journal'
+import type { PrintMargins } from './print-settings'
 
 // No File tab: file commands live in the macOS
 // application menu (File → Open/Save/Save As) and the toolbar icons.
@@ -261,6 +263,8 @@ interface ExcelShellProps {
   readonly onGetConsolidateDefault: () => string
   /// Header & Footer dialog OK; returns an error message, or null on success.
   readonly onApplyHeaderFooter: (result: HeaderFooterResult) => string | null
+  /// Custom Margins dialog OK; returns an error message, or null on success.
+  readonly onApplyCustomMargins: (margins: CustomMargins) => string | null
   /// Session page-layout settings of the active sheet, echoed by the Page
   /// Layout tab's controls (untouched fields show the app default).
   readonly pageLayout: PageLayoutEcho
@@ -276,7 +280,7 @@ export interface PageLayoutEcho {
   readonly scale?: number | undefined
   readonly fitToWidth?: number | undefined
   readonly fitToHeight?: number | undefined
-  readonly margins?: 'normal' | 'wide' | 'narrow' | undefined
+  readonly margins?: 'normal' | 'wide' | 'narrow' | CustomMargins | undefined
   readonly printGridlines?: boolean | undefined
   readonly printHeadings?: boolean | undefined
   readonly showGridlines: boolean
@@ -285,6 +289,9 @@ export interface PageLayoutEcho {
   readonly printTitles?: string | null | undefined
   readonly header?: HeaderFooterParts | null | undefined
   readonly footer?: HeaderFooterParts | null | undefined
+  /// Concrete inch margins for the Custom Margins dialog prefill (journal
+  /// edits overlaid on the file's saved <pageMargins>).
+  readonly effectiveMargins?: PrintMargins | undefined
   /// Page Break Preview overlay on for the active sheet (View tab echo).
   readonly pageBreakPreview?: boolean | undefined
 }
@@ -329,6 +336,7 @@ export function ExcelShell({
   onCreateConsolidate,
   onGetConsolidateDefault,
   onApplyHeaderFooter,
+  onApplyCustomMargins,
   onPromptChange,
   onSend,
   onStop,
@@ -383,6 +391,7 @@ export function ExcelShell({
   const [showConsolidateDialog, setShowConsolidateDialog] = useState(false)
   const [showGoTo, setShowGoTo] = useState(false)
   const [showHeaderFooter, setShowHeaderFooter] = useState(false)
+  const [showMarginsDialog, setShowMarginsDialog] = useState(false)
   const [showAllowEditRanges, setShowAllowEditRanges] = useState(false)
   /// Non-null while the Chart Design → Add Chart Element text prompt is open.
   const [chartTextTarget, setChartTextTarget] = useState<ChartTextTarget | null>(null)
@@ -445,6 +454,21 @@ export function ExcelShell({
     }
     window.addEventListener('keydown', onKeyDownCapture, true)
     return () => window.removeEventListener('keydown', onKeyDownCapture, true)
+  }, [])
+  // While the in-cell editor is open, pressing the character-styling tools
+  // ([data-keep-editing]) must not move focus — a blur would commit the edit
+  // and the style would land on the whole cell. preventDefault on mousedown
+  // keeps the editor focused (its text selection intact) so the command can
+  // target the selected characters. Inputs opt out: they need real focus.
+  useEffect(() => {
+    const onMouseDownCapture = (event: MouseEvent): void => {
+      if (!onIsCellEditingRef.current()) return
+      const target = event.target as HTMLElement | null
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
+      if (target?.closest?.('[data-keep-editing]')) event.preventDefault()
+    }
+    window.addEventListener('mousedown', onMouseDownCapture, true)
+    return () => window.removeEventListener('mousedown', onMouseDownCapture, true)
   }, [])
   // Deselecting while on the contextual tab lands back on Home.
   useEffect(() => {
@@ -580,6 +604,7 @@ export function ExcelShell({
             else if (command === 'consolidate-open') setShowConsolidateDialog(true)
             else if (command === 'goto-open') setShowGoTo(true)
             else if (command === 'header-footer-open') setShowHeaderFooter(true)
+            else if (command === 'margins-custom-open') setShowMarginsDialog(true)
             else if (command === 'allow-edit-ranges-open') setShowAllowEditRanges(true)
             else if (command === 'ai-open-panel') setIsCopilotOpen(true)
             else if (command === 'ai-toggle-panel') setIsCopilotOpen((v) => !v)
@@ -820,6 +845,13 @@ export function ExcelShell({
           initialFooter={pageLayout.footer ?? null}
           onApply={onApplyHeaderFooter}
           onClose={() => setShowHeaderFooter(false)}
+        />
+      )}
+      {showMarginsDialog && (
+        <MarginsDialog
+          initial={pageLayout.effectiveMargins ?? null}
+          onApply={onApplyCustomMargins}
+          onClose={() => setShowMarginsDialog(false)}
         />
       )}
     </main>
@@ -1752,6 +1784,13 @@ function Ribbon({
       wide: t('appMarginWide'),
       narrow: t('appMarginNarrow'),
     } as const
+    // Journal preset name, journal custom values, or the file's own margins.
+    const marginEcho =
+      pageLayout.margins === undefined
+        ? t('appAsSavedInFile')
+        : typeof pageLayout.margins === 'string'
+          ? marginLabels[pageLayout.margins]
+          : t('appMarginCustomEcho')
     return (
       <div className="ribbon">
         <RibbonGroup label={t('appGroupThemes')}>
@@ -1799,13 +1838,12 @@ function Ribbon({
           {largeMenu(
             t('appMargins'),
             '⿴',
-            t('appMarginsTitle', {
-              value: pageLayout.margins ? marginLabels[pageLayout.margins] : t('appAsSavedInFile'),
-            }),
+            t('appMarginsTitle', { value: marginEcho }),
             [
               { value: 'page-layout:margins:normal', label: t('appMarginNormal') },
               { value: 'page-layout:margins:wide', label: t('appMarginWide') },
               { value: 'page-layout:margins:narrow', label: t('appMarginNarrow') },
+              { value: 'margins-custom-open', label: t('appMarginCustom') },
             ],
           )}
           {largeMenu(
@@ -1858,6 +1896,13 @@ function Ribbon({
               { value: 'page-layout:print-titles:clear', label: t('appClearPrintTitles') },
             ],
           )}
+          <RibbonButton
+            large
+            label={t('appHeaderFooter')}
+            detail={t('appPrintedPages')}
+            symbol="🗎"
+            onClick={() => onCommand('header-footer-open')}
+          />
         </RibbonGroup>
         <RibbonGroup label={t('appGroupScaleToFit')}>
           <div className="row-stack">
@@ -2602,6 +2647,7 @@ function Ribbon({
               onOpen={loadSystemFonts}
               onPick={(value) => onCommand(`font-family:${value}`)}
               commit={(text) => onCommand(`font-family:${text}`)}
+              data-keep-editing
             />
             <EditableMenuSelect
               className="select-like font-size"
@@ -2616,10 +2662,12 @@ function Ribbon({
                 if (Number.isFinite(size) && size >= 1 && size <= 409)
                   onCommand(`font-size:${size}`)
               }}
+              data-keep-editing
             />
             <button
               data-tip={t('appIncreaseFontSize')}
               aria-label={t('appIncreaseFontSize')}
+              data-keep-editing
               onClick={() => onCommand(`font-size:${stepFontSize(echoSize, 1)}`)}
             >
               <ToolSymbol symbol="A↑" />
@@ -2627,6 +2675,7 @@ function Ribbon({
             <button
               data-tip={t('appDecreaseFontSize')}
               aria-label={t('appDecreaseFontSize')}
+              data-keep-editing
               onClick={() => onCommand(`font-size:${stepFontSize(echoSize, -1)}`)}
             >
               <ToolSymbol symbol="A↓" />
@@ -2636,6 +2685,7 @@ function Ribbon({
             <button
               data-tip={t('appBold')}
               className={selectionFormat?.bold ? 'is-active' : ''}
+              data-keep-editing
               onClick={() => onCommand('bold')}
             >
               <b>B</b>
@@ -2643,6 +2693,7 @@ function Ribbon({
             <button
               data-tip={t('appItalic')}
               className={selectionFormat?.italic ? 'is-active' : ''}
+              data-keep-editing
               onClick={() => onCommand('italic')}
             >
               <em>I</em>
@@ -2650,6 +2701,7 @@ function Ribbon({
             <button
               data-tip={t('appUnderline')}
               className={selectionFormat?.underline ? 'is-active' : ''}
+              data-keep-editing
               onClick={() => onCommand('underline')}
             >
               <u>U</u>
@@ -2663,6 +2715,7 @@ function Ribbon({
             <button
               data-tip={t('appStrikethrough')}
               className={selectionFormat?.strike ? 'is-active' : ''}
+              data-keep-editing
               onClick={() => onCommand('strike')}
             >
               <s>S</s>
@@ -2670,6 +2723,7 @@ function Ribbon({
             <ColorDropdown
               label="Font color"
               data-tip={t('appFontColor')}
+              data-keep-editing
               display={
                 <span className="swatch-letter">
                   A<i style={{ background: fontColor }} />
@@ -3075,6 +3129,7 @@ function MenuSelect({
   value = '',
   options,
   onPick,
+  'data-keep-editing': keepEditing,
 }: {
   /// aria-label (mirrors the old select's aria-label)
   readonly label: string
@@ -3089,6 +3144,9 @@ function MenuSelect({
   readonly value?: string
   readonly options: readonly { value: string; label: string }[]
   readonly onPick: (value: string) => void
+  /// mark the tool so presses keep the in-cell editor focused (Excel-style
+  /// character styling inside the editor); see the mousedown capture above
+  readonly 'data-keep-editing'?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -3096,7 +3154,7 @@ function MenuSelect({
   useDismissablePopover(open, () => setOpen(false), { inside: () => [wrapRef.current] })
   useEscapeClose(open, () => setOpen(false))
   return (
-    <div ref={wrapRef} className={`menu-select${cover ? ' menu-select-cover' : ''}`}>
+    <div ref={wrapRef} className={`menu-select${cover ? ' menu-select-cover' : ''}`} data-keep-editing={keepEditing || undefined}>
       <button
         type="button"
         className={cover ? 'cover-select' : className}
@@ -3209,6 +3267,7 @@ function EditableMenuSelect({
   onOpen,
   onPick,
   commit,
+  'data-keep-editing': keepEditing,
 }: {
   readonly label: string
   readonly 'data-tip'?: string
@@ -3220,6 +3279,9 @@ function EditableMenuSelect({
   readonly onPick: (value: string) => void
   /// apply typed text (caller validates; invalid input is dropped silently)
   readonly commit: (text: string) => void
+  /// mark the tool so presses keep the in-cell editor focused (Excel-style
+  /// character styling inside the editor); see the mousedown capture above
+  readonly 'data-keep-editing'?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [draft, setDraftState] = useState<string | null>(null)
@@ -3240,7 +3302,7 @@ function EditableMenuSelect({
     setDraft(null)
   }
   return (
-    <div ref={wrapRef} className="menu-select">
+    <div ref={wrapRef} className="menu-select" data-keep-editing={keepEditing || undefined}>
       <span className={`${className ?? ''} menu-select-edit`} data-tip={tip}>
         <input
           value={draft ?? value}

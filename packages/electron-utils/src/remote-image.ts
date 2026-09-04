@@ -4,7 +4,6 @@
 /// of retries turn most of those transient failures into successful inserts.
 
 import { fetchWithSsrfGuard, type FetchWithSsrfGuardOptions } from './safe-remote-url'
-
 const RETRY_DELAYS_MS: readonly number[] = [500, 1500]
 
 export function remoteImageHeaders(rawUrl: string): Record<string, string> {
@@ -34,7 +33,7 @@ export function remoteImageHeaders(rawUrl: string): Record<string, string> {
  */
 export async function fetchRemoteImage(
   rawUrl: string,
-  options: Pick<FetchWithSsrfGuardOptions, 'fetchImpl'> & {
+  options: Pick<FetchWithSsrfGuardOptions, 'fetchImpl' | 'lookupImpl'> & {
     retryDelaysMs?: readonly number[]
   } = {},
 ): Promise<Response | null> {

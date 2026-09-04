@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { Editor, JSONContent } from '@tiptap/core'
 import {
   SHAPE_GALLERY_GROUPS,
+  downscaleImageDataUrl,
   useDismissablePopover,
   wordArtSolidColor,
   type WordArtPreset,
@@ -264,33 +265,32 @@ export function insertTableAt(editor: Editor, rows: number, cols: number): void 
 export async function insertImageFromDataUrl(
   editor: Editor,
   dataUrl: string,
-  label = t('ribbonPicture'),
+  _label = t('ribbonPicture'),
 ): Promise<boolean> {
-  const m = /^data:([^;]+);base64,(.*)$/s.exec(dataUrl)
+  const m = /^data:([^;]+);base64,.*$/s.exec(dataUrl)
   if (!m) return false
-  const mime = m[1]
-  if (!/^image\/(png|jpeg|gif)$/.test(mime)) return false
+  if (!/^image\/(png|jpeg|gif)$/.test(m[1])) return false
   try {
-    const natural = await imageSizeOf(dataUrl)
-    const scale = Math.min(1, MAX_IMAGE_WIDTH_PX / natural.width)
+    // Downscale once (a 4000px screenshot otherwise re-decodes on every layout
+    // pass and freezes the editor); the scaled dims keep print quality.
+    const natural = await downscaleImageDataUrl(dataUrl)
+    const width = natural.width
+    const height = natural.height
+    if (width <= 0 || height <= 0) return false
+    const scale = Math.min(1, MAX_IMAGE_WIDTH_PX / width)
+    // Inline (in-text) image: it flows with the paragraph text, so several fit
+    // on one line and mix with words. xml stays '' — the engine synthesizes a
+    // fresh <w:drawing> on save (media + relationship registered there).
     editor
       .chain()
       .focus()
       .insertContent({
-        type: 'docProtected',
+        type: 'docInlineImage',
         attrs: {
-          docxIndex: null,
-          blockType: 'image',
-          label,
-          imageDataUrl: dataUrl,
-          imageWidthPx: Math.round(natural.width * scale),
-          imageHeightPx: Math.round(natural.height * scale),
-          genImage: {
-            base64: m[2],
-            mime,
-            widthPx: Math.round(natural.width * scale),
-            heightPx: Math.round(natural.height * scale),
-          },
+          dataUrl: natural.dataUrl,
+          widthPx: Math.round(width * scale),
+          heightPx: Math.round(height * scale),
+          xml: '',
         },
       })
       .run()

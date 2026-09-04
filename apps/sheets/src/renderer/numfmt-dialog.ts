@@ -50,7 +50,45 @@ export const NUMFMT_CATEGORIES: readonly NumfmtCategory[] = [
 
 export const NEGATIVE_STYLES: readonly NegativeStyle[] = ['minus', 'red', 'parens', 'red-parens']
 
-export const CURRENCY_SYMBOLS: readonly string[] = ['¥', '$', '€', '£', 'US$', 'HK$', '₩']
+/// One common currency for the Format Cells symbol picker. `code` is the
+/// ISO 4217 code (language-neutral label); `symbol` is what the OOXML
+/// pattern carries. Symbols are deduplicated (the picker's option value is
+/// the symbol), so e.g. ¥ appears once with CNY as its representative code
+/// and 'kr' once (SEK) — the pattern can't encode an ISO code otherwise.
+export interface CurrencyOption {
+  readonly code: string
+  readonly symbol: string
+}
+
+/// Common currencies, deduped by symbol, ordered roughly by usage frequency.
+/// Multi-char symbols ('HK$', 'RM', 'Rp', 'CHF', 'kr', 'zł') are quoted by
+/// `symbolToken` when written.
+export const COMMON_CURRENCIES: readonly CurrencyOption[] = [
+  { code: 'USD', symbol: '$' },
+  { code: 'CNY', symbol: '¥' },
+  { code: 'EUR', symbol: '€' },
+  { code: 'GBP', symbol: '£' },
+  { code: 'HKD', symbol: 'HK$' },
+  { code: 'TWD', symbol: 'NT$' },
+  { code: 'KRW', symbol: '₩' },
+  { code: 'SGD', symbol: 'S$' },
+  { code: 'AUD', symbol: 'A$' },
+  { code: 'CAD', symbol: 'C$' },
+  { code: 'NZD', symbol: 'NZ$' },
+  { code: 'RUB', symbol: '₽' },
+  { code: 'INR', symbol: '₹' },
+  { code: 'THB', symbol: '฿' },
+  { code: 'MYR', symbol: 'RM' },
+  { code: 'IDR', symbol: 'Rp' },
+  { code: 'BRL', symbol: 'R$' },
+  { code: 'CHF', symbol: 'CHF' },
+  { code: 'SEK', symbol: 'kr' },
+  { code: 'PLN', symbol: 'zł' },
+  { code: 'TRY', symbol: '₺' },
+  { code: 'VND', symbol: '₫' },
+  { code: 'ZAR', symbol: 'R' },
+  { code: 'MXN', symbol: 'US$' },
+]
 
 export const DATE_PATTERNS: readonly string[] = [
   'yyyy-mm-dd',

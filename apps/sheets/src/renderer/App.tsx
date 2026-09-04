@@ -184,6 +184,7 @@ import type {
   AttachmentMeta,
   MenuAction,
   RecoveryPromptPayload,
+  WorkbookExportPdfRequest,
   WorkbookFile,
   WorkbookVisualObject,
 } from '../shared/desktop-api'
@@ -311,11 +312,15 @@ import {
   type RibbonCommandContext,
 } from './ribbon-actions'
 import {
+  buildActiveSheetPdfPayload as buildActiveSheetPdfPayloadImpl,
+  exportPdfPayload as exportPdfPayloadImpl,
+  handleApplyCustomMargins as handleApplyCustomMarginsImpl,
   handleApplyHeaderFooter as handleApplyHeaderFooterImpl,
-  handleExportPdf as handleExportPdfImpl,
   handlePageLayoutCommand as handlePageLayoutCommandImpl,
+  resolveSheetEffectiveSetup,
   type PageLayoutContext,
 } from './page-layout-actions'
+import { ExportPdfDialog } from './ExportPdfDialog'
 import { handleExportCsv as handleExportCsvImpl, type CsvExportContext } from './csv-export'
 import { effectivePageBreaks, installPageBreakPreview } from './page-break-preview'
 import { mapProtectedRanges } from './protected-ranges'
@@ -590,6 +595,9 @@ export function App(): React.JSX.Element {
   const [chartDialog, setChartDialog] = useState<{ kind: ChartDialogKind; editKey: string } | null>(
     null,
   )
+  /// The active sheet's print payload behind the Export-PDF dialog (page
+  /// range + preview); null while the dialog is closed.
+  const [exportPdfDraft, setExportPdfDraft] = useState<WorkbookExportPdfRequest | null>(null)
   const chartElement = useSyncExternalStore(
     subscribeChartElementSelection,
     getChartElementSelection,
@@ -705,6 +713,13 @@ export function App(): React.JSX.Element {
       setPendingEdits,
       refreshPageBreakPreview,
     }
+  }
+
+  /// Ribbon / File-menu "Export as PDF": lays the active sheet out and opens
+  /// the export dialog (page range + preview) instead of saving outright.
+  function openExportPdfDialog(): void {
+    const payload = buildActiveSheetPdfPayloadImpl(pageLayoutContext())
+    if (payload !== null) setExportPdfDraft(payload)
   }
 
   function csvExportContext(): CsvExportContext {
@@ -3827,7 +3842,7 @@ export function App(): React.JSX.Element {
       dataToolsContext,
       pivotContext,
       handlePageLayoutCommand: (rest) => handlePageLayoutCommandImpl(pageLayoutContext(), rest),
-      handleExportPdf: () => handleExportPdfImpl(pageLayoutContext()),
+      handleExportPdf: openExportPdfDialog,
     }
   }
 
@@ -4393,7 +4408,7 @@ export function App(): React.JSX.Element {
     if (action === 'open') {
       void handleInspectWorkbook()
     } else if (action === 'export-pdf') {
-      void handleExportPdfImpl(pageLayoutContext())
+      openExportPdfDialog()
     } else if (action === 'export-csv') {
       void handleExportCsvImpl(csvExportContext())
     } else if (action === 'undo' || action === 'redo') {
@@ -4492,11 +4507,28 @@ export function App(): React.JSX.Element {
 
   const activePageLayout = (() => {
     const worksheet = univerRef.current?.univerAPI.getActiveWorkbook()?.getActiveSheet()
-    const journalState = worksheet
-      ? (lazyWorkbookRef.current?.editJournal.pageSetup.get(worksheet.getSheetId()) ?? {})
+    const workbookState = lazyWorkbookRef.current
+    const sheetId = worksheet?.getSheetId()
+    const journalState = sheetId
+      ? (workbookState?.editJournal.pageSetup.get(sheetId) ?? {})
       : {}
+    // Dialog prefills resolve journal edits over the file's saved settings:
+    // prefilling from the journal alone showed an empty Header & Footer
+    // dialog for files that already had one (and OK then journaled null,
+    // wiping it on save), and the margins dialog must prefill the values
+    // that are actually in effect.
+    const effective = sheetId && workbookState
+      ? resolveSheetEffectiveSetup(workbookState, sheetId)
+      : null
     return {
       ...journalState,
+      ...(effective === null
+        ? {}
+        : {
+            header: effective.header,
+            footer: effective.footer,
+            effectiveMargins: effective.margins,
+          }),
       showGridlines:
         journalState.showGridlines ?? (worksheet ? !worksheet.hasHiddenGridLines() : true),
       showHeadings:
@@ -4542,6 +4574,21 @@ export function App(): React.JSX.Element {
             setRecoveryPrompt(null)
             window.desktopApi?.replyRecoveryPrompt?.(restore)
           }}
+        />
+      )}
+      {exportPdfDraft && (
+        <ExportPdfDialog
+          draft={exportPdfDraft}
+          onPreview={(payload) => {
+            void window.desktopApi.previewPdf(payload).then((result) => {
+              if (!result.ok) setMessage(t('dlgExportPdfPreviewFailed', { error: result.error }))
+            })
+          }}
+          onExport={(payload) => {
+            setExportPdfDraft(null)
+            void exportPdfPayloadImpl(pageLayoutContext(), payload)
+          }}
+          onClose={() => setExportPdfDraft(null)}
         />
       )}
       {chartDialog && chartDialogTarget && chartDialog.kind === 'format' && (
@@ -4639,6 +4686,9 @@ export function App(): React.JSX.Element {
         onCreateConsolidate={(config) => handleCreateConsolidateImpl(dataToolsContext(), config)}
         onGetConsolidateDefault={() => consolidateDefaultReferenceImpl(dataToolsContext())}
         onApplyHeaderFooter={(result) => handleApplyHeaderFooterImpl(pageLayoutContext(), result)}
+        onApplyCustomMargins={(margins) =>
+          handleApplyCustomMarginsImpl(pageLayoutContext(), margins)
+        }
       />
       {advancedFilterColumns !== null && (
         <AdvancedFilterDialog

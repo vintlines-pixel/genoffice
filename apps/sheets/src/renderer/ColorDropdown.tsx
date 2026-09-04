@@ -58,6 +58,7 @@ export function ColorDropdown({
   disabled,
   portal,
   onPick,
+  'data-keep-editing': keepEditing,
 }: {
   /// aria-label of the trigger
   readonly label: string
@@ -72,6 +73,9 @@ export function ColorDropdown({
   /// render the panel in a body portal (for transformed/clipping hosts)
   readonly portal?: boolean
   readonly onPick: (hex: string | null) => void
+  /// mark the tool so presses keep the in-cell editor focused (Excel-style
+  /// character styling inside the editor)
+  readonly 'data-keep-editing'?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -96,7 +100,7 @@ export function ColorDropdown({
     }
   }, [open])
   return (
-    <div ref={wrapRef} className="menu-select">
+    <div ref={wrapRef} className="menu-select" data-keep-editing={keepEditing || undefined}>
       <button
         type="button"
         className={display ? 'color-tool' : 'color-well'}

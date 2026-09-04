@@ -48,6 +48,16 @@ describe('applyPageSetupState', () => {
     )
   })
 
+  it('writes custom margins as explicit pageMargins values', () => {
+    const xml = applyPageSetupState(BARE, {
+      sheetName: 'S',
+      margins: { left: 0.4, right: 0.6, top: 0.9, bottom: 0.8, header: 0.2, footer: 0.35 },
+    })
+    expect(xml).toContain(
+      '<pageMargins left="0.4" right="0.6" top="0.9" bottom="0.8" header="0.2" footer="0.35"/>',
+    )
+  })
+
   it('orders printOptions before an existing pageMargins', () => {
     const xml = applyPageSetupState(
       applyPageSetupState(BARE, { sheetName: 'S', margins: 'wide' }),

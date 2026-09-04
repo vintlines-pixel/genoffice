@@ -58,17 +58,23 @@ describe('resolveDefaultSaveDir', () => {
     expect(existsSync(fallback)).toBe(true)
   })
 
-  it('degrades to the fallback when the configured folder is not writable', () => {
-    const readOnly = join(root, 'read-only')
-    mkdirSync(readOnly)
-    chmodSync(readOnly, 0o500)
-    const fallback = join(root, 'fallback')
-    try {
-      expect(resolveDefaultSaveDir(readOnly, fallback)).toBe(fallback)
-    } finally {
-      chmodSync(readOnly, 0o700)
-    }
-  })
+  // Windows ignores POSIX mode bits for directory write permission, so a
+  // chmod-read-only dir is still writable there and the fallback never kicks
+  // in — the case is POSIX-load-bearing only.
+  it.skipIf(process.platform === 'win32')(
+    'degrades to the fallback when the configured folder is not writable',
+    () => {
+      const readOnly = join(root, 'read-only')
+      mkdirSync(readOnly)
+      chmodSync(readOnly, 0o500)
+      const fallback = join(root, 'fallback')
+      try {
+        expect(resolveDefaultSaveDir(readOnly, fallback)).toBe(fallback)
+      } finally {
+        chmodSync(readOnly, 0o700)
+      }
+    },
+  )
 })
 
 describe('configuredDefaultSaveDir', () => {

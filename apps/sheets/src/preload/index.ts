@@ -240,29 +240,7 @@ const desktopApi: DesktopApi = {
     return result as { renamed: boolean; name?: string }
   },
   async exportPdf(request) {
-    if (
-      !isRecord(request) ||
-      typeof request.fileName !== 'string' ||
-      request.fileName.length === 0 ||
-      request.fileName.length > 255 ||
-      typeof request.html !== 'string' ||
-      request.html.length === 0 ||
-      request.html.length > 20_000_000 ||
-      typeof request.landscape !== 'boolean' ||
-      !isPdfPageSize(request.pageSize) ||
-      !isRecord(request.margins) ||
-      !['top', 'bottom', 'left', 'right'].every((edge) => {
-        const value = (request.margins as Record<string, unknown>)[edge]
-        return typeof value === 'number' && value >= 0 && value <= 3
-      }) ||
-      typeof request.scale !== 'number' ||
-      request.scale < 0.1 ||
-      request.scale > 2 ||
-      (request.headerTemplate !== undefined && !isBoundedString(request.headerTemplate, 50_000)) ||
-      (request.footerTemplate !== undefined && !isBoundedString(request.footerTemplate, 50_000))
-    ) {
-      throw new Error('Invalid PDF export request.')
-    }
+    if (!isValidPdfPrintRequest(request)) throw new Error('Invalid PDF export request.')
     const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.exportPdf, request)
     if (
       !isRecord(result) ||
@@ -272,6 +250,18 @@ const desktopApi: DesktopApi = {
       throw new Error('Invalid PDF export response.')
     }
     return result as { canceled: true } | { canceled: false; path: string }
+  },
+  async previewPdf(request) {
+    if (!isValidPdfPrintRequest(request)) throw new Error('Invalid PDF export request.')
+    const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.previewPdf, request)
+    if (
+      !isRecord(result) ||
+      typeof result.ok !== 'boolean' ||
+      (result.ok === false && typeof result.error !== 'string')
+    ) {
+      throw new Error('Invalid PDF preview response.')
+    }
+    return result as { ok: true } | { ok: false; error: string }
   },
   async exportCsv(request) {
     if (
@@ -1993,6 +1983,34 @@ function isPdfPageSize(input: unknown): boolean {
   )
 }
 
+/// Shared by exportPdf and previewPdf (same wire shape plus optional
+/// Chromium pageRanges like '1-3,5').
+function isValidPdfPrintRequest(input: unknown): boolean {
+  return (
+    isRecord(input) &&
+    typeof input.fileName === 'string' &&
+    input.fileName.length > 0 &&
+    input.fileName.length <= 255 &&
+    typeof input.html === 'string' &&
+    input.html.length > 0 &&
+    input.html.length <= 20_000_000 &&
+    typeof input.landscape === 'boolean' &&
+    isPdfPageSize(input.pageSize) &&
+    isRecord(input.margins) &&
+    ['top', 'bottom', 'left', 'right'].every((edge) => {
+      const value = (input.margins as Record<string, unknown>)[edge]
+      return typeof value === 'number' && value >= 0 && value <= 3
+    }) &&
+    typeof input.scale === 'number' &&
+    input.scale >= 0.1 &&
+    input.scale <= 2 &&
+    (input.headerTemplate === undefined || isBoundedString(input.headerTemplate, 50_000)) &&
+    (input.footerTemplate === undefined || isBoundedString(input.footerTemplate, 50_000)) &&
+    (input.pageRanges === undefined ||
+      (typeof input.pageRanges === 'string' && /^[0-9][0-9,\-]{0,63}$/.test(input.pageRanges)))
+  )
+}
+
 function isPageSetupState(input: unknown): boolean {
   if (!isRecord(input) || typeof input.sheetId !== 'string' || input.sheetId.length === 0) {
     return false
@@ -2010,8 +2028,19 @@ function isPageSetupState(input: unknown): boolean {
   if (input.zoomScale !== undefined && !isBoundedInt(input.zoomScale, 10, 400)) return false
   if (input.fitToWidth !== undefined && !isBoundedInt(input.fitToWidth, 0, 1_000)) return false
   if (input.fitToHeight !== undefined && !isBoundedInt(input.fitToHeight, 0, 1_000)) return false
-  if (input.margins !== undefined && !['normal', 'wide', 'narrow'].includes(String(input.margins)))
-    return false
+  if (input.margins !== undefined) {
+    const preset =
+      input.margins === 'normal' || input.margins === 'wide' || input.margins === 'narrow'
+    const okEdge = (value: unknown) =>
+      typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 10
+    const custom =
+      isRecord(input.margins) &&
+      Object.keys(input.margins).length === 6 &&
+      ['left', 'right', 'top', 'bottom', 'header', 'footer'].every(
+        (edge) => okEdge((input.margins as Record<string, unknown>)[edge]),
+      )
+    if (!preset && !custom) return false
+  }
   for (const key of [
     'printGridlines',
     'printHeadings',

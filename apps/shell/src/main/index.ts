@@ -655,17 +655,20 @@ function createShellWindow(): void {
 // ---- routing: one dispatch function for every open path ----
 
 const DOCX_RE = /\.docx$/i
+/** legacy Word 97-2003: routed to the docs app, which converts it next to itself */
+const DOC_RE = /\.doc$/i
 const XLSX_RE = /\.(xlsx|xlsm|xls|csv)$/i
 const PPTX_RE = /\.pptx$/i
 const PDF_RE = /\.pdf$/i
 const MD_RE = /\.(md|markdown)$/i
 
 /** document formats we recognize but don't open — surfaced as a dialog, not silently dropped */
-const UNSUPPORTED_DOC_RE = /\.(doc|rtf|odt|ppt|pps|odp|ods|xlsb|pages|key|numbers)$/i
+const UNSUPPORTED_DOC_RE = /\.(rtf|odt|ppt|pps|odp|ods|xlsb|pages|key|numbers)$/i
 
 /**
  * Single source of truth for the open-dialog filter. Includes the
- * legacy .doc/.ppt binaries so they are selectable and surface the explicit
+ * legacy .doc/.ppt binaries so they are selectable; .doc opens via the docs
+ * app's convert-next-to-self import, .ppt surfaces the explicit
  * "not supported" dialog via openDocumentPath instead of being grayed out.
  */
 const OPEN_DIALOG_EXTENSIONS = [
@@ -687,6 +690,7 @@ function supportedFileIn(argv: string[]): string | null {
     argv.find(
       (arg) =>
         (DOCX_RE.test(arg) ||
+          DOC_RE.test(arg) ||
           XLSX_RE.test(arg) ||
           PPTX_RE.test(arg) ||
           PDF_RE.test(arg) ||
@@ -765,6 +769,14 @@ function openGeneratedDocument(filePath: string): boolean {
 function routeDocumentPath(filePath: string): boolean {
   if (!existsSync(filePath) || !tabManager) return false
   if (DOCX_RE.test(filePath)) {
+    recordRecentFile(filePath)
+    const existing = tabManager.findDocsTabByPath(filePath)
+    if (existing) tabManager.activateTab(existing)
+    else tabManager.openDocsTab(filePath)
+    return true
+  }
+  if (DOC_RE.test(filePath)) {
+    // legacy .doc: the docs tab converts it next to itself on consume
     recordRecentFile(filePath)
     const existing = tabManager.findDocsTabByPath(filePath)
     if (existing) tabManager.activateTab(existing)

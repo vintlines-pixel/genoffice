@@ -451,6 +451,9 @@ export async function saveDocx(
     headingStyleIds: parsed.headingStyleIds,
     listParagraphStyleId: parsed.listParagraphStyleId,
     allocateHyperlinkRel,
+    // run-inner inline image (a NEW one has no stored <w:drawing> xml): the
+    // generate layer synthesizes a fresh inline drawing from the bytes.
+    embedImage: embedInlineImage,
   }
 
   const newMedia: Array<{ path: string; base64: string }> = []
@@ -476,8 +479,9 @@ export async function saveDocx(
     }
     return hit
   }
-  /** drawing paragraph XML for one inline image (shared by body and header/footer embeds) */
-  const embedImageDrawing = (image: NewImage, rId: string): string => {
+  /** run-inner <w:drawing> for one inline image: `<w:p>`/pPr stay out because
+   *  inline images live inside an existing paragraph of text. */
+  const inlineDrawingXml = (image: NewImage, rId: string): string => {
     const cx = Math.max(1, Math.round(image.widthPx * EMU_PER_PX))
     const cy = Math.max(1, Math.round(image.heightPx * EMU_PER_PX))
     // Word lays the drawing out against the unrotated wp:extent plus
@@ -491,6 +495,27 @@ export async function saveDocx(
     const eeY = Math.max(0, Math.round((bh - cy) / 2))
     // dedup means imageSeq does not advance for repeated bytes — docPr ids need their own counter
     const docPrId = 9000 + ++docPrSeq
+    const drawing =
+      `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">` +
+      `<wp:extent cx="${cx}" cy="${cy}"/>` +
+      `<wp:effectExtent l="${eeX}" t="${eeY}" r="${eeX}" b="${eeY}"/>` +
+      `<wp:docPr id="${docPrId}" name="Picture ${docPrId}"/>` +
+      '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
+      '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+      '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+      `<pic:nvPicPr><pic:cNvPr id="${docPrId}" name="Picture ${docPrId}"/><pic:cNvPicPr/></pic:nvPicPr>` +
+      `<pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+      `<pic:spPr><a:xfrm${rot ? ` rot="${rot * 60000}"` : ''}${image.flipH ? ' flipH="1"' : ''}${image.flipV ? ' flipV="1"' : ''}><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
+      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
+      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>'
+    // a wrapping image is anchored, not inline — applyImageWrap rewrites the
+    // <wp:inline> to <wp:anchor> and adds the position/wrap element
+    return image.wrap
+      ? applyImageWrap(drawing, image.wrap, image.posOffsetEmu, undefined, image.zOrder)
+      : drawing
+  }
+  /** drawing paragraph XML for one image (shared by body and header/footer embeds) */
+  const embedImageDrawing = (image: NewImage, rId: string): string => {
     const ps = image.paraSpacing
     const spacingAttrs: string[] = []
     if (ps?.beforeTwips && ps.beforeTwips > 0)
@@ -503,19 +528,7 @@ export async function saveDocx(
     const spacing = spacingAttrs.length > 0 ? `<w:spacing ${spacingAttrs.join(' ')}/>` : ''
     const jc = image.align && image.align !== 'left' ? `<w:jc w:val="${image.align}"/>` : ''
     const pPr = spacing || jc ? `<w:pPr>${spacing}${jc}</w:pPr>` : ''
-    const xml =
-      `<w:p>${pPr}<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">` +
-      `<wp:extent cx="${cx}" cy="${cy}"/>` +
-      `<wp:effectExtent l="${eeX}" t="${eeY}" r="${eeX}" b="${eeY}"/>` +
-      `<wp:docPr id="${docPrId}" name="Picture ${docPrId}"/>` +
-      '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
-      '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
-      '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
-      `<pic:nvPicPr><pic:cNvPr id="${docPrId}" name="Picture ${docPrId}"/><pic:cNvPicPr/></pic:nvPicPr>` +
-      `<pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
-      `<pic:spPr><a:xfrm${rot ? ` rot="${rot * 60000}"` : ''}${image.flipH ? ' flipH="1"' : ''}${image.flipV ? ' flipV="1"' : ''}><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
-      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
-      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>'
+    const xml = `<w:p>${pPr}<w:r>${inlineDrawingXml(image, rId)}</w:r></w:p>`
     return image.wrap
       ? applyImageWrap(xml, image.wrap, image.posOffsetEmu, undefined, image.zOrder)
       : xml
@@ -525,6 +538,12 @@ export async function saveDocx(
     const { rId, path } = embedImageMedia(image)
     newRels.push({ rId, type: IMAGE_REL_TYPE, target: path.replace(/^word\//, ''), external: false })
     return embedImageDrawing(image, rId)
+  }
+  /** run-inner inline image for the generate layer (new images have no xml). */
+  function embedInlineImage(image: NewImage): string {
+    const { rId, path } = embedImageMedia(image)
+    newRels.push({ rId, type: IMAGE_REL_TYPE, target: path.replace(/^word\//, ''), external: false })
+    return inlineDrawingXml(image, rId)
   }
   /** header/footer inline image: relationship lands in that part's own rels */
   const hfImageRels = new Map<string, Array<{ rId: string; type: string; target: string }>>()

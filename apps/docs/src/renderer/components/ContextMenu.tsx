@@ -180,25 +180,42 @@ export function EditorContextMenu({
   }
 
   const protAttrs = editor.getAttributes('docProtected')
-  const isImage = protAttrs?.blockType === 'image'
+  const isBlockImage = protAttrs?.blockType === 'image'
+  const isInlineImage = editor.isActive('docInlineImage')
+  // both image forms expose wrap state; z-order only exists on block images
+  const imageAttrs = isBlockImage
+    ? protAttrs
+    : isInlineImage
+      ? editor.getAttributes('docInlineImage')
+      : null
+  const imageNode = isBlockImage ? 'docProtected' : isInlineImage ? 'docInlineImage' : null
+  const isImage = isBlockImage || isInlineImage
   const isFloating =
     isImage ||
     (Array.isArray(protAttrs?.textboxes) && (protAttrs.textboxes as unknown[]).length > 0)
-  const currentWrap = (protAttrs?.imageWrap as string | null) ?? null
+  const currentWrap = (imageAttrs?.imageWrap as string | null) ?? null
   const setWrap = (wrap: string | null) => {
+    if (!imageNode) return
+    // inline images carry only EMU offsets; block images also have posH/posV
+    const cleared = wrap === null ? { imageOffsetXEmu: null, imageOffsetYEmu: null } : {}
     const clearedPosition =
-      wrap === null
-        ? { imagePosH: null, imagePosV: null, imageOffsetXEmu: null, imageOffsetYEmu: null }
+      imageNode === 'docProtected' && wrap === null
+        ? { imagePosH: null, imagePosV: null }
         : {}
     editor
       .chain()
       .focus()
-      .updateAttributes('docProtected', { imageWrap: wrap, ...clearedPosition })
+      .updateAttributes(imageNode, {
+        imageWrap: wrap,
+        ...cleared,
+        ...clearedPosition,
+      })
       .run()
   }
   // Stacking order among overlapping floating pictures. z-order only has a
-  // visible effect on floating (front/behind) images, so the menu enables it
-  // there; a bring-forward on an inline image also floats it (Word parity).
+  // visible effect on floating (front/behind) block images, so the menu
+  // enables it there; a bring-forward on an inline image also floats it
+  // (Word parity) but stays within the block-image path.
   const currentZOrder = Number((protAttrs?.imageZOrder as number | null) ?? 0)
   const isFloatingWrap = currentWrap === 'front' || currentWrap === 'behind'
   const setZOrder = (z: number) => {
@@ -477,25 +494,27 @@ export function EditorContextMenu({
               </div>
             )}
           </div>
-          <div className="ctx-item-wrap" onMouseLeave={() => setSubmenu(null)}>
-            {item(t('appArrangeMenu'), { submenuKey: 'arrange' })}
-            {submenu === 'arrange' && (
-              <div className="ctx-submenu">
-                <button className="ctx-item" onClick={run(bringToFront)}>
-                  <span className="ctx-label">{t('appBringToFront')}</span>
-                </button>
-                <button className="ctx-item" onClick={run(bringForward)}>
-                  <span className="ctx-label">{t('appBringForward')}</span>
-                </button>
-                <button className="ctx-item" onClick={run(sendBackward)}>
-                  <span className="ctx-label">{t('appSendBackward')}</span>
-                </button>
-                <button className="ctx-item" onClick={run(sendToBack)}>
-                  <span className="ctx-label">{t('appSendToBack')}</span>
-                </button>
-              </div>
-            )}
-          </div>
+          {isBlockImage && (
+            <div className="ctx-item-wrap" onMouseLeave={() => setSubmenu(null)}>
+              {item(t('appArrangeMenu'), { submenuKey: 'arrange' })}
+              {submenu === 'arrange' && (
+                <div className="ctx-submenu">
+                  <button className="ctx-item" onClick={run(bringToFront)}>
+                    <span className="ctx-label">{t('appBringToFront')}</span>
+                  </button>
+                  <button className="ctx-item" onClick={run(bringForward)}>
+                    <span className="ctx-label">{t('appBringForward')}</span>
+                  </button>
+                  <button className="ctx-item" onClick={run(sendBackward)}>
+                    <span className="ctx-label">{t('appSendBackward')}</span>
+                  </button>
+                  <button className="ctx-item" onClick={run(sendToBack)}>
+                    <span className="ctx-label">{t('appSendToBack')}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
       <div className="ctx-sep" />

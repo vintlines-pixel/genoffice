@@ -1,6 +1,7 @@
 import type {
   GeneratedBlock,
   ImageWrap,
+  NewImage,
   ParaFormat,
   ParaFrame,
   Run,
@@ -17,6 +18,14 @@ export interface GenerateContext {
   listParagraphStyleId?: string
   /** allocate a new relationship id for a hyperlink target; returns rId */
   allocateHyperlinkRel: (href: string) => string
+  /**
+   * Build a run-inner <w:drawing> for a brand-new inline image (registers the
+   * media part + relationship) and returns the fragment. Called when a run's
+   * image has no stored <w:drawing> xml — i.e. the image was inserted in the
+   * editor, not read from the file. Absent (textbox/header-footer generation)
+   * degrades to nothing.
+   */
+  embedImage?: (image: NewImage) => string
 }
 
 const EMU_PER_PX = 9525
@@ -2060,20 +2069,25 @@ export function generateIndexFieldXml(terms: string[]): string[] {
 }
 
 function generateRunsXml(runs: Run[], ctx: GenerateContext): string {
-  return runsXml(runs, ctx.allocateHyperlinkRel)
+  return runsXml(runs, ctx.allocateHyperlinkRel, ctx.embedImage)
 }
 
 /** OOXML runs without relationship allocation (header/footer parts, ...) */
 export function inlineRunsXml(runs: Run[]): string {
-  return runsXml(runs, null)
+  return runsXml(runs, null, undefined)
 }
 
 /**
  * OOXML runs for a run list. `allocate` mints rIds for new external links;
  * pass null where no relationship allocation is possible (textbox patches) —
- * links without an existing rId then degrade to plain runs.
+ * links without an existing rId then degrade to plain runs. `embedImage`
+ * synthesizes a <w:drawing> for a new inline image (see GenerateContext).
  */
-function runsXml(runs: Run[], allocate: ((href: string) => string) | null): string {
+function runsXml(
+  runs: Run[],
+  allocate: ((href: string) => string) | null,
+  embedImage?: (image: NewImage) => string,
+): string {
   // comment ranges: re-emit start/end/reference markers around the first..last
   // run each id covers, so editing a commented paragraph keeps its comments
   const firstOf = new Map<string, number>()
@@ -2122,25 +2136,25 @@ function runsXml(runs: Run[], allocate: ((href: string) => string) | null): stri
         const tooltip = group[0]?.link?.tooltip
         const tipAttr = tooltip ? ` w:tooltip="${escapeXmlAttr(tooltip)}"` : ''
         if (href.startsWith('#')) {
-          const inner = group.map((r) => runFragmentXml(r, true)).join('')
+          const inner = group.map((r) => runFragmentXml(r, true, embedImage)).join('')
           parts.push(
             `<w:hyperlink w:anchor="${escapeXmlAttr(href.slice(1))}"${tipAttr}>${inner}</w:hyperlink>`,
           )
         } else {
           const finalRId = rId ?? allocate?.(href)
           if (finalRId) {
-            const inner = group.map((r) => runFragmentXml(r, true)).join('')
+            const inner = group.map((r) => runFragmentXml(r, true, embedImage)).join('')
             parts.push(
               `<w:hyperlink r:id="${escapeXmlAttr(finalRId)}"${tipAttr}>${inner}</w:hyperlink>`,
             )
           } else {
-            parts.push(group.map((r) => runFragmentXml(r, false)).join(''))
+            parts.push(group.map((r) => runFragmentXml(r, false, embedImage)).join(''))
           }
         }
         for (let j = groupStart; j < i; j++) parts.push(endsAt(j))
       } else {
         parts.push(startsAt(i))
-        parts.push(runFragmentXml(run, false))
+        parts.push(runFragmentXml(run, false, embedImage))
         parts.push(endsAt(i))
         i++
       }
@@ -2186,11 +2200,18 @@ function runsXml(runs: Run[], allocate: ((href: string) => string) | null): stri
   return parts.join('')
 }
 
+/** data:image/…;base64,xxx → NewImage bytes; null when not a supported inline image. */
+function dataUrlImage(dataUrl: string): NewImage | null {
+  const match = /^data:(image\/(?:png|jpeg|gif));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl)
+  if (!match) return null
+  return { base64: match[2], mime: match[1] as NewImage['mime'], widthPx: 0, heightPx: 0 }
+}
+
 /**
  * One run's OOXML, including atomic constructs the plain-text run cannot
  * express: footnote/endnote reference markers and trailing XE index fields.
  */
-function runFragmentXml(run: Run, insideLink: boolean): string {
+function runFragmentXml(run: Run, insideLink: boolean, embedImage?: (image: NewImage) => string): string {
   // atomic inline formula: the stored <m:oMath> fragment is already valid
   // paragraph content (patch.ts adds the xmlns:m declaration when missing)
   if (run.math) return run.math.omml
@@ -2199,7 +2220,22 @@ function runFragmentXml(run: Run, insideLink: boolean): string {
   // atomic cell picture: the exact <w:drawing> fragment re-wrapped in a run
   if (run.image) {
     const text = run.text === '' ? '' : generateRunXml({ ...run, image: undefined }, insideLink)
-    return `${text}<w:r>${run.image.xml}</w:r>`
+    const stored = run.image.xml
+    // brand-new inline image (no stored drawing): synthesize from the bytes
+    const newImage =
+      stored === '' && embedImage && run.image.dataUrl ? dataUrlImage(run.image.dataUrl) : null
+    const hasOffset =
+      run.image.offsetXEmu != null && run.image.offsetYEmu != null
+    const drawingXml = newImage
+      ? embedImage!({
+          ...newImage,
+          widthPx: run.image.widthPx ?? 0,
+          heightPx: run.image.heightPx ?? 0,
+          ...(run.image.wrap ? { wrap: run.image.wrap } : {}),
+          ...(hasOffset ? { posOffsetEmu: { x: run.image.offsetXEmu!, y: run.image.offsetYEmu! } } : {}),
+        })
+      : stored
+    return `${text}<w:r>${drawingXml}</w:r>`
   }
   if (run.noteRef) {
     const tag = run.noteRef.kind === 'footnote' ? 'w:footnoteReference' : 'w:endnoteReference'

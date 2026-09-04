@@ -7,7 +7,7 @@ import { draftFromSelection, formatCellsCommands, type FormatCellsDraft } from '
 import { useI18n, type StringKey } from './i18n/locale'
 import {
   clampDecimals,
-  CURRENCY_SYMBOLS,
+  COMMON_CURRENCIES,
   datePatterns,
   FRACTION_PATTERNS,
   NEGATIVE_STYLES,
@@ -251,9 +251,9 @@ export function FormatCellsDialog({
                           value={numOptions.symbol}
                           options={[
                             { value: '', label: t('dlgFcSymbolNone') },
-                            ...CURRENCY_SYMBOLS.map((symbol) => ({
-                              value: symbol,
-                              label: symbol,
+                            ...COMMON_CURRENCIES.map((currency) => ({
+                              value: currency.symbol,
+                              label: `${currency.code} ${currency.symbol}`,
                             })),
                           ]}
                           onPick={(v) => updateNumfmt({ symbol: v })}

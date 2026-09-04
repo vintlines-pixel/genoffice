@@ -2402,7 +2402,9 @@ export function inlineToRuns(content: PmNode[]): Run[] {
     if (node.type === 'docInlineImage') {
       const dataUrl = String(node.attrs?.dataUrl ?? '')
       const xml = String(node.attrs?.xml ?? '')
-      if (dataUrl && xml) {
+      // dataUrl alone is enough: a brand-new image has no stored drawing xml,
+      // and the engine synthesizes one on save.
+      if (dataUrl) {
         runs.push({
           text: '',
           image: {
@@ -2410,6 +2412,19 @@ export function inlineToRuns(content: PmNode[]): Run[] {
             xml,
             ...(node.attrs?.widthPx ? { widthPx: Number(node.attrs.widthPx) } : {}),
             ...(node.attrs?.heightPx ? { heightPx: Number(node.attrs.heightPx) } : {}),
+            // floating/wrap state must round-trip so an inline picture can
+            // wrap text on either side / float over it (Word parity)
+            ...(node.attrs?.wrap ? { wrap: node.attrs.wrap as ImageWrap } : {}),
+            ...(node.attrs?.offsetXEmu != null ? { offsetXEmu: Number(node.attrs.offsetXEmu) } : {}),
+            ...(node.attrs?.offsetYEmu != null ? { offsetYEmu: Number(node.attrs.offsetYEmu) } : {}),
+            ...(node.attrs?.wrapDistTopEmu != null ? { wrapDistTopEmu: Number(node.attrs.wrapDistTopEmu) } : {}),
+            ...(node.attrs?.wrapDistBottomEmu != null ? { wrapDistBottomEmu: Number(node.attrs.wrapDistBottomEmu) } : {}),
+            ...(node.attrs?.wrapDistLeftEmu != null ? { wrapDistLeftEmu: Number(node.attrs.wrapDistLeftEmu) } : {}),
+            ...(node.attrs?.wrapDistRightEmu != null ? { wrapDistRightEmu: Number(node.attrs.wrapDistRightEmu) } : {}),
+            ...(node.attrs?.border
+              ? { border: node.attrs.border as { color: string; widthPt: number } }
+              : {}),
+            ...(node.attrs?.lineCenterV ? { lineCenterV: Boolean(node.attrs.lineCenterV) } : {}),
           },
         })
       }

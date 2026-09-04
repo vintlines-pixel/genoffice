@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@genoffice/docx-engine': local('../../packages/docx-engine/src/index.ts'),
+      '@genoffice/file-parse': local('../../packages/file-parse/src/index.ts'),
       '@genoffice/font-metrics': local('../../packages/font-metrics/src/index.ts'),
       '@genoffice/electron-utils': local('../../packages/electron-utils/src/index.ts'),
       '@genoffice/ai-provider': local('../../packages/ai-provider/src/index.ts'),
@@ -20,6 +21,8 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'jsdom',
-    testTimeout: 20000,
+    // 100k-iteration password hashing (protect-dialog) can exceed 20s under
+    // load; keep the cap well past the worst case so it is not a flake source.
+    testTimeout: 60_000,
   },
 })

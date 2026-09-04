@@ -7,6 +7,13 @@
 import { lookup } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
 
+/** Narrow, non-overloaded DNS resolver used by the SSRF host check; the
+ *  node:dns/promises `lookup` satisfies it (its `{ all: true }` overload). */
+export type DnsLookup = (
+  hostname: string,
+  options: { all: true },
+) => Promise<Array<{ address: string; family: number }>>
+
 /**
  * Non-public address ranges. BlockList does the range math and maps
  * ::ffff:0:0/96 addresses back onto the IPv4 rules, which hand-rolled string
@@ -51,11 +58,16 @@ export function isBlockedAddress(ip: string): boolean {
  * checked directly; hostnames are resolved and every returned address must pass,
  * so a name pointing at an internal address is rejected.
  *
+ * `lookupImpl` is injectable so tests (and offline hosts) don't hit real DNS.
+ *
  * This is a best-effort control, not a guarantee: DNS can change between this
  * check and the request (rebinding). Pair it with per-hop revalidation via
  * `fetchWithSsrfGuard` rather than relying on a single up-front check.
  */
-export async function isSafeRemoteUrl(raw: unknown): Promise<boolean> {
+export async function isSafeRemoteUrl(
+  raw: unknown,
+  lookupImpl: DnsLookup = lookup,
+): Promise<boolean> {
   if (typeof raw !== 'string') return false
   let url: URL
   try {
@@ -70,7 +82,7 @@ export async function isSafeRemoteUrl(raw: unknown): Promise<boolean> {
   if (isIP(host)) return !isBlockedAddress(host)
   if (host === 'localhost' || BLOCKED_HOST_SUFFIXES.some((s) => host.endsWith(s))) return false
   try {
-    const addrs = await lookup(host, { all: true })
+    const addrs = await lookupImpl(host, { all: true })
     return addrs.length > 0 && addrs.every((a) => !isBlockedAddress(a.address))
   } catch {
     return false
@@ -83,6 +95,8 @@ export interface FetchWithSsrfGuardOptions {
   headers?: Record<string, string>
   /** Injectable for tests; defaults to global fetch. */
   fetchImpl?: typeof fetch
+  /** Injectable DNS resolver for the SSRF host check (defaults to node:dns/promises). */
+  lookupImpl?: DnsLookup
 }
 
 /**
@@ -94,10 +108,10 @@ export async function fetchWithSsrfGuard(
   rawUrl: string,
   options: FetchWithSsrfGuardOptions = {},
 ): Promise<Response | null> {
-  const { maxRedirects = 5, headers, fetchImpl = fetch } = options
+  const { maxRedirects = 5, headers, fetchImpl = fetch, lookupImpl } = options
   let current = rawUrl
   for (let hop = 0; hop <= maxRedirects; hop++) {
-    if (!(await isSafeRemoteUrl(current))) return null
+    if (!(await isSafeRemoteUrl(current, lookupImpl))) return null
     // headers stays absent rather than explicitly undefined (exactOptionalPropertyTypes)
     const resp = await fetchImpl(current, {
       ...(headers ? { headers } : {}),

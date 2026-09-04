@@ -7,6 +7,7 @@
 import {
   BooleanNumber,
   BorderStyleTypes,
+  ICommandService,
   WrapStrategy,
   type ICellData,
   type IStyleData,
@@ -16,6 +17,10 @@ import { SheetSkeletonManagerService } from '@univerjs/preset-sheets-core'
 import { columnLabel, formatAddress } from '../domain/cell-address'
 import { transposeChartSeries, type ChartSeriesVisualState } from '../domain/chart-visual'
 import { applyFlashFillTemplate, inferFlashFillTemplate } from '../domain/flash-fill'
+import {
+  inlineStyleEditorCommand,
+  isCellEditorOpen,
+} from './editor-inline-style'
 import type {
   WorkbookChartEdit,
   WorkbookStyleEdit,
@@ -122,7 +127,8 @@ export interface RibbonCommandContext {
   dataToolsContext: () => DataToolsContext
   pivotContext: () => PivotActionContext
   handlePageLayoutCommand: (rest: string) => void
-  handleExportPdf: () => Promise<void>
+  /// Opens the Export-PDF dialog (page range + preview).
+  handleExportPdf: () => void
 }
 
 /// Resolves interned style references and merges row/col/sheet styles —
@@ -1004,7 +1010,7 @@ export function handleRibbonCommand(ctx: RibbonCommandContext, command: string):
     return
   }
   if (command === 'export-pdf') {
-    void ctx.handleExportPdf()
+    ctx.handleExportPdf()
     return
   }
   if (command.startsWith('row-height:') || command.startsWith('col-width:')) {
@@ -1105,6 +1111,23 @@ export function handleRibbonCommand(ctx: RibbonCommandContext, command: string):
     return
   }
   const { name, argument, extra } = parseStyleCommand(command)
+  // Excel parity: with the in-cell editor open, character styling (bold,
+  // italic, underline, strikethrough, size, family, font color) applies to
+  // the selected characters as rich text — not to the whole cell. Commands
+  // without a rich-run equivalent (double underline, fill, borders…) fall
+  // through to the whole-cell path below. The click's mousedown is
+  // prevented in ExcelShell ([data-keep-editing]) so the editor keeps focus
+  // and its selection while the ribbon is used.
+  if (isCellEditorOpen(runtime)) {
+    const inline = inlineStyleEditorCommand(name, argument)
+    if (inline !== null) {
+      const commandService = runtime.univer
+        .__getInjector()
+        .get<ICommandService>(ICommandService)
+      const done = commandService.syncExecuteCommand(inline.id, inline.params)
+      if (done !== false) return
+    }
+  }
   // Excel persists select-all / full-column formatting as the columns'
   // DEFAULT format: new cells inherit it at any row, forever. Univer only
   // materializes styles onto cells within the current grid bounds, so
