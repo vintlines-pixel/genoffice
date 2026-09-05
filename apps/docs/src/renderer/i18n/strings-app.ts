@@ -102,6 +102,7 @@ export const appStrings = defineStrings({
     appExportedPdfMixed: '已导出 PDF: {path}(混合纸张,{n} 组已按页合并)',
     appExportPdfCanceled: '已取消导出 PDF',
     appMixedExportOpening: '混合纸张文档:正在打开分页预览并按页合并导出…',
+    appExportPreviewHint: '已在分页预览中打开——确认无误后点击预览工具栏的导出按钮生成 PDF',
     // Comments
     appSelectTextToComment: '先选中要批注的文字',
     appCommentSelectionLost: '选区已失效,请重新选中要批注的文字',
@@ -465,6 +466,8 @@ export const appStrings = defineStrings({
     appExportedPdfMixed: 'PDF exported: {path} (mixed paper sizes, {n} groups merged by page)',
     appExportPdfCanceled: 'PDF export canceled',
     appMixedExportOpening: 'Mixed paper sizes: opening pagination preview to export pages merged…',
+    appExportPreviewHint:
+      'Opened in the pagination preview — review it, then use the export button in the preview toolbar to create the PDF',
     appSelectTextToComment: 'Select the text to comment on first',
     appCommentSelectionLost: 'The selection is no longer valid; reselect the text to comment on',
     appCommentAdded: 'Comment added; written to the document on save',
@@ -826,6 +829,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'PDF のエクスポートをキャンセルしました',
     appMixedExportOpening:
       '用紙サイズが混在する文書:ページ プレビューを開き、ページごとに結合してエクスポートしています…',
+    appExportPreviewHint:
+      'ページ分割プレビューで開きました——確認後、プレビューツールバーの書き出しボタンでPDFを作成してください',
     // Comments
     appSelectTextToComment: 'コメントを付けるテキストを先に選択してください',
     appCommentSelectionLost:
@@ -1208,6 +1213,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'PDF 내보내기를 취소했습니다',
     appMixedExportOpening:
       '용지 크기가 혼합된 문서: 페이지 미리 보기를 열어 페이지별로 병합하여 내보내는 중…',
+    appExportPreviewHint:
+      '페이지 나누기 미리보기에서 열렸습니다 — 확인 후 미리보기 도구 모음의 내보내기 버튼으로 PDF를 만드세요',
     // Comments
     appSelectTextToComment: '메모를 추가할 텍스트를 먼저 선택하세요',
     appCommentSelectionLost:
@@ -1586,6 +1593,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'Exportation PDF annulée',
     appMixedExportOpening:
       "Formats de papier mixtes : ouverture de l'aperçu de pagination pour exporter les pages fusionnées…",
+    appExportPreviewHint:
+      "Ouvert dans l'aperçu de pagination — vérifiez-le, puis utilisez le bouton d'export de la barre d'outils de l'aperçu pour créer le PDF",
     appSelectTextToComment: "Sélectionnez d'abord le texte à commenter",
     appCommentSelectionLost:
       "La sélection n'est plus valide ; sélectionnez à nouveau le texte à commenter",
@@ -1950,6 +1959,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'PDF-Export abgebrochen',
     appMixedExportOpening:
       'Gemischte Papierformate: Seitenvorschau wird geöffnet, um die Seiten zusammengeführt zu exportieren…',
+    appExportPreviewHint:
+      'In der Seitenumbruch-Vorschau geöffnet — prüfen Sie sie und erstellen Sie den PDF über die Export-Schaltfläche der Vorschau-Symbolleiste',
     appSelectTextToComment: 'Wählen Sie zuerst den zu kommentierenden Text aus',
     appCommentSelectionLost:
       'Die Auswahl ist nicht mehr gültig; wählen Sie den zu kommentierenden Text erneut aus',
@@ -2316,6 +2327,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'Exportación de PDF cancelada',
     appMixedExportOpening:
       'Tamaños de papel mixtos: abriendo la vista previa de paginación para exportar las páginas combinadas…',
+    appExportPreviewHint:
+      'Abierto en la vista previa de paginación — revísela y use el botón de exportación de la barra de herramientas de la vista previa para crear el PDF',
     appSelectTextToComment: 'Seleccione primero el texto que desea comentar',
     appCommentSelectionLost:
       'La selección ya no es válida; vuelva a seleccionar el texto que desea comentar',
@@ -2673,6 +2686,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'ยกเลิกการส่งออก PDF แล้ว',
     appMixedExportOpening:
       'เอกสารมีขนาดกระดาษผสม: กำลังเปิดตัวอย่างการแบ่งหน้าเพื่อส่งออกแบบรวมทีละหน้า…',
+    appExportPreviewHint:
+      'เปิดในหน้าต่างตัวอย่างการแบ่งหน้าแล้ว — ตรวจสอบแล้วใช้ปุ่มส่งออกในแถบเครื่องมือของหน้าต่างตัวอย่างเพื่อสร้าง PDF',
     appSelectTextToComment: 'เลือกข้อความที่ต้องการใส่ข้อคิดเห็นก่อน',
     appCommentSelectionLost:
       'ส่วนที่เลือกไม่ถูกต้องแล้ว โปรดเลือกข้อความที่ต้องการใส่ข้อคิดเห็นอีกครั้ง',
@@ -3028,6 +3043,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'Ekspor PDF dibatalkan',
     appMixedExportOpening:
       'Ukuran kertas campuran: membuka pratinjau paginasi untuk mengekspor halaman yang digabungkan…',
+    appExportPreviewHint:
+      'Dibuka di pratinjau paginasi — tinjau, lalu gunakan tombol ekspor di bilah alat pratinjau untuk membuat PDF',
     appSelectTextToComment: 'Pilih teks yang ingin dikomentari terlebih dahulu',
     appCommentSelectionLost: 'Pilihan tidak lagi valid; pilih kembali teks yang ingin dikomentari',
     appCommentAdded: 'Komentar ditambahkan; ditulis ke dokumen saat disimpan',
@@ -3384,6 +3401,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'Экспорт PDF отменен',
     appMixedExportOpening:
       'Смешанные форматы бумаги: открывается предварительный просмотр страниц для постраничного объединения при экспорте…',
+    appExportPreviewHint:
+      'Открыто в режиме предпросмотра разбивки на страницы — проверьте и создайте PDF кнопкой экспорта на панели предпросмотра',
     appSelectTextToComment: 'Сначала выделите текст для примечания',
     appCommentSelectionLost:
       'Выделение больше недействительно; выделите текст для примечания заново',
@@ -3742,6 +3761,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'تم إلغاء تصدير PDF',
     appMixedExportOpening:
       'أحجام ورق مختلطة: جارٍ فتح معاينة ترقيم الصفحات للتصدير مع الدمج حسب الصفحات…',
+    appExportPreviewHint:
+      'تم الفتح في معاينة ترقيم الصفحات — راجعها ثم استخدم زر التصدير في شريط أدوات المعاينة لإنشاء PDF',
     appSelectTextToComment: 'حدد النص المراد التعليق عليه أولاً',
     appCommentSelectionLost: 'لم يعد التحديد صالحًا؛ أعد تحديد النص المراد التعليق عليه',
     appCommentAdded: 'تمت إضافة التعليق؛ سيُكتب في المستند عند الحفظ',
@@ -4094,6 +4115,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'Exportação de PDF cancelada',
     appMixedExportOpening:
       'Tamanhos de papel mistos: abrindo a visualização de paginação para exportar mesclando por página…',
+    appExportPreviewHint:
+      'Aberto na pré-visualização de paginação — revise e use o botão de exportação da barra de ferramentas da pré-visualização para gerar o PDF',
     appSelectTextToComment: 'Selecione primeiro o texto a comentar',
     appCommentSelectionLost: 'A seleção não é mais válida; selecione novamente o texto a comentar',
     appCommentAdded: 'Comentário adicionado; gravado no documento ao salvar',
@@ -4450,6 +4473,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'Esportazione PDF annullata',
     appMixedExportOpening:
       "Formati carta misti: apertura dell'anteprima di impaginazione per esportare unendo per pagina…",
+    appExportPreviewHint:
+      "Aperto nell'anteprima di impaginazione — controllala, poi usa il pulsante di esportazione della barra strumenti dell'anteprima per creare il PDF",
     appSelectTextToComment: 'Seleziona prima il testo da commentare',
     appCommentSelectionLost: 'La selezione non è più valida; riseleziona il testo da commentare',
     appCommentAdded: 'Commento aggiunto; scritto nel documento al salvataggio',
@@ -4809,6 +4834,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'Anulowano eksport PDF',
     appMixedExportOpening:
       'Mieszane rozmiary papieru: otwieranie podglądu podziału na strony w celu eksportu ze scaleniem według stron…',
+    appExportPreviewHint:
+      'Otwarto w podglądzie paginacji — sprawdź, a następnie użyj przycisku eksportu na pasku podglądu, aby utworzyć PDF',
     appSelectTextToComment: 'Najpierw zaznacz tekst do skomentowania',
     appCommentSelectionLost:
       'Zaznaczenie jest już nieaktualne; zaznacz ponownie tekst do skomentowania',
@@ -5170,6 +5197,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'PDF-export geannuleerd',
     appMixedExportOpening:
       'Gemengde papierformaten: pagineringsvoorbeeld wordt geopend om per pagina samengevoegd te exporteren…',
+    appExportPreviewHint:
+      'Geopend in de pagineringvoorweergave — controleer deze en gebruik de exportknop in de werkbalk van de voorweergave om de PDF te maken',
     appSelectTextToComment: 'Selecteer eerst de tekst waarop je een opmerking wilt plaatsen',
     appCommentSelectionLost:
       'De selectie is niet meer geldig; selecteer de tekst voor de opmerking opnieuw',
@@ -5536,6 +5565,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'Eksport PDF dibatalkan',
     appMixedExportOpening:
       'Saiz kertas bercampur: membuka pratonton penomboran halaman untuk eksport dengan gabungan mengikut halaman…',
+    appExportPreviewHint:
+      'Dibuka dalam pratonton paginasi — semak, kemudian gunakan butang eksport pada bar alat pratonton untuk menghasilkan PDF',
     appSelectTextToComment: 'Pilih dahulu teks yang hendak dikomen',
     appCommentSelectionLost: 'Pilihan tidak lagi sah; pilih semula teks yang hendak dikomen',
     appCommentAdded: 'Komen ditambah; ditulis ke dokumen semasa disimpan',
@@ -5887,6 +5918,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'ייצוא ה-PDF בוטל',
     appMixedExportOpening:
       'גודלי נייר מעורבים: נפתחת תצוגה מקדימה של עימוד לייצוא עם איחוד לפי עמודים…',
+    appExportPreviewHint:
+      'נפתח בתצוגה המקדימה של חלוקת העמודים — בדקו והשתמשו בכפתור הייצוא בסרגל הכלים של התצוגה ליצירת ה-PDF',
     appSelectTextToComment: 'תחילה סמנו את הטקסט שעליו תרצו להעיר',
     appCommentSelectionLost: 'הסימון אינו תקף עוד; סמנו שוב את הטקסט להערה',
     appCommentAdded: 'ההערה נוספה; תיכתב למסמך בעת השמירה',
@@ -6239,6 +6272,8 @@ export const appStrings = defineStrings({
     appExportPdfCanceled: 'PDF निर्यात रद्द किया गया',
     appMixedExportOpening:
       'मिश्रित कागज़ आकार: पृष्ठ अनुसार मर्ज करके निर्यात के लिए पृष्ठांकन पूर्वावलोकन खोला जा रहा है…',
+    appExportPreviewHint:
+      'पेजिनेशन प्रीव्यू में खोला गया — समीक्षा करें, फिर प्रीव्यू टूलबार के एक्सपोर्ट बटन से PDF बनाएँ',
     appSelectTextToComment: 'पहले वह टेक्स्ट चुनें जिस पर टिप्पणी करनी है',
     appCommentSelectionLost: 'चयन अब मान्य नहीं है; टिप्पणी के लिए टेक्स्ट फिर से चुनें',
     appCommentAdded: 'टिप्पणी जोड़ी गई; सहेजने पर दस्तावेज़ में लिखी जाएगी',
@@ -6588,6 +6623,7 @@ export const appStrings = defineStrings({
     appExportedPdfMixed: '已匯出 PDF: {path}(混合紙張,{n} 組已按頁合併)',
     appExportPdfCanceled: '已取消匯出 PDF',
     appMixedExportOpening: '混合紙張文件:正在開啟分頁預覽並按頁合併匯出…',
+    appExportPreviewHint: '已在分頁預覽中開啟——確認無誤後點擊預覽工具列的匯出按鈕產生 PDF',
     appSelectTextToComment: '請先選取要加註解的文字',
     appCommentSelectionLost: '選取範圍已失效,請重新選取要加註解的文字',
     appCommentAdded: '已新增註解,儲存後寫入文件',

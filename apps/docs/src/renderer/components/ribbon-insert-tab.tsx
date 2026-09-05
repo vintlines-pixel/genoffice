@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import type { Editor } from '@tiptap/core'
 import { ShapePreview, WORDART_PRESETS, wordArtStrokePx } from '@genoffice/ui'
 import type { ChartDisplay, HeaderFooter, NewChart } from '@genoffice/docx-engine'
+import { applyHfText } from '../editor/hf-text'
 import { hfHasPageField, hfWithoutPageMarks } from '../editor/hf-dom'
 import { EquationGallery, EquationModal } from './EquationModal'
 import { COVER_PRESETS, insertCoverPage, type CoverPreset } from '../editor/cover-pages'
@@ -1063,7 +1064,7 @@ export function InsertTab({
               <HfEditor
                 label={t('ribbonHeader')}
                 current={header?.text ?? ''}
-                onApply={(text) => onHeader({ text })}
+                onApply={(text) => onHeader(applyHfText(header, text))}
                 onClose={() => setDropdown(() => null)}
               />
             )}
@@ -1085,7 +1086,7 @@ export function InsertTab({
               <HfEditor
                 label={t('ribbonFooter')}
                 current={footer?.text ?? ''}
-                onApply={(text) => onFooter({ text, pageNumber: footer?.pageNumber ?? false })}
+                onApply={(text) => onFooter(applyHfText(footer, text))}
                 onClose={() => setDropdown(() => null)}
               />
             )}

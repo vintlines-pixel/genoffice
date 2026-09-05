@@ -428,6 +428,7 @@ export function makeGapHfEl(opts: {
   if (images && images.length > 0) {
     const imgWrap = document.createElement('div')
     imgWrap.className = 'page-hf-images'
+    if (parasOf(value).length === 0) wrap.style.marginBottom = '12px'
     if (images[0].align === 'right') imgWrap.style.justifyContent = 'flex-end'
     else if (images[0].align === 'center') imgWrap.style.justifyContent = 'center'
     for (const img of images) {

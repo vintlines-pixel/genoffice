@@ -827,11 +827,9 @@ async function saveOnce(
     if (!unchanged) {
       editor.commands.setContent(rebasedPm as never)
       resetEditorHistory(editor)
-      const chain = editor
-        .chain()
-        .setTextSelection(Math.min(selectionPos, editor.state.doc.content.size))
-      if (!auto) chain.scrollIntoView()
-      chain.run()
+      // restore the caret, but never scroll: a manual save must not yank the
+      // viewport (read as a flash/jump), Word keeps the view still on save
+      editor.chain().setTextSelection(Math.min(selectionPos, editor.state.doc.content.size)).run()
     }
     ctx.setDocCss(docStyleCss(reparsed))
     ctx.setDoc((prev) =>
@@ -1046,9 +1044,10 @@ export async function exportPdf(ctx: FileActionContext, outPath?: string): Promi
       evenOddHf: ctx.evenOddHf,
     })
   ) {
+    // preview-first: open the pagination preview and let the user export from
+    // its toolbar (previously a 1.2s timer auto-exported unseen)
     ctx.setShowPagePreview(true)
-    ctx.pendingMixedExportRef.current = outPath ?? true
-    if (mixedPaper) ctx.setStatus(t('appMixedExportOpening'))
+    ctx.setStatus(t('appExportPreviewHint'))
     return
   }
   const major = [...counts.values()][0]

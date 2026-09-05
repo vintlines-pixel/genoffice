@@ -139,6 +139,7 @@ export function HeaderFooterArea({
   onInsertImage,
   onRemoveImage,
   onReplaceImage,
+  onResizeImage,
   pageNo,
   pageTotal,
   style,
@@ -156,6 +157,8 @@ export function HeaderFooterArea({
   onRemoveImage?: (index: number) => void
   /** swap an image that is already in the part for one from disk (parsed-image order) */
   onReplaceImage?: (index: number, image: NewImage) => void
+  /** commit a new size for an image already in the part (parsed-image order) */
+  onResizeImage?: (index: number, widthPx: number, heightPx: number) => void
   /** Page number shown for '#' (may be a section-formatted string); the continuous-flow canvas has no real page number, defaults to 1 */
   pageNo?: number | string
   /** Total page count shown for TOTAL_PAGES_MARK (NUMPAGES field), defaults to 1 */
@@ -172,6 +175,49 @@ export function HeaderFooterArea({
   const editRef = useRef<HTMLDivElement>(null)
   const cancelRef = useRef(false)
   const initialHtmlRef = useRef('')
+  /** live size of the image being drag-resized (index + displayed px) */
+  const [resizing, setResizing] = useState<{ index: number; w: number; h: number } | null>(null)
+  const resizingRef = useRef<{
+    index: number
+    w0: number
+    h0: number
+    x0: number
+    ratio: number
+  } | null>(null)
+
+  /** drag the corner handle: live preview, aspect-ratio locked, commit on release */
+  const startResize = (index: number, img: HTMLImageElement, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = img.getBoundingClientRect()
+    resizingRef.current = {
+      index,
+      w0: rect.width,
+      h0: rect.height,
+      x0: e.clientX,
+      ratio: rect.height / rect.width,
+    }
+    setResizing({ index, w: rect.width, h: rect.height })
+    const move = (ev: MouseEvent) => {
+      const st = resizingRef.current
+      if (!st) return
+      const w = Math.max(24, st.w0 + (ev.clientX - st.x0))
+      setResizing({ index: st.index, w, h: w * st.ratio })
+    }
+    const up = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      const st = resizingRef.current
+      resizingRef.current = null
+      const w = Math.max(24, st ? st.w0 + (ev.clientX - st.x0) : 0)
+      setResizing(null)
+      // zoom-aware: on-screen px include the canvas zoom factor
+      const zoom = parseFloat(getComputedStyle(img.closest('.doc-zoom') ?? img).zoom || '1') || 1
+      onResizeImage?.(index, Math.round(w / zoom), Math.round((w * (st?.ratio ?? 1)) / zoom))
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
   // An image-only part (logo header) has no text paragraphs: hfParasOf would
   // still synthesize one empty line, which stacks a stray blank line over the
   // body's first paragraph (it even intercepts its clicks).
@@ -309,7 +355,13 @@ export function HeaderFooterArea({
   return (
     <div
       className={`page-hf page-hf-${kind}${editing ? ' page-hf-editing' : ''}`}
-      style={style}
+      style={{
+        ...style,
+        // Word-style gap between an image-only logo and the body: a margin on
+        // the strip itself, so the dashed rule stays under the logo and the
+        // body starts below the gap (the push-down estimate reserves it)
+        ...(imageOnly && !editing ? { marginBottom: 12 } : {}),
+      }}
       data-tip={
         readOnly
           ? undefined
@@ -328,27 +380,46 @@ export function HeaderFooterArea({
         <div
           className="page-hf-images"
           contentEditable={false}
-          style={
-            images.find((im) => !im.floating)?.align === 'right'
+          style={{
+            ...(images.find((im) => !im.floating)?.align === 'right'
               ? { justifyContent: 'flex-end' }
               : images.find((im) => !im.floating)?.align === 'center'
                 ? { justifyContent: 'center' }
-                : undefined
-          }
+                : {}),
+          }}
         >
           {images
             .filter((img) => !img.floating)
             .map((img, i) => (
-              <span key={i} className="page-hf-imgwrap">
+              <span key={i} className="page-hf-imgwrap" data-resizable="1">
                 <img
                   src={img.dataUrl}
                   alt=""
                   draggable={false}
                   style={{
-                    ...(img.widthPx ? { width: img.widthPx } : {}),
-                    ...(img.heightPx ? { height: img.heightPx } : {}),
+                    ...(resizing && resizing.index === img.parsedIndex
+                      ? { width: resizing.w, height: resizing.h }
+                      : {}),
+                    ...(!(resizing && resizing.index === img.parsedIndex) && img.widthPx
+                      ? { width: img.widthPx }
+                      : {}),
+                    ...(!(resizing && resizing.index === img.parsedIndex) && img.heightPx
+                      ? { height: img.heightPx }
+                      : {}),
                   }}
                 />
+                {img.parsedIndex !== undefined && !readOnly && onResizeImage && (
+                  <span
+                    className="page-hf-imghandle"
+                    onMouseDown={(e) =>
+                      startResize(
+                        img.parsedIndex!,
+                        e.currentTarget.previousElementSibling as HTMLImageElement,
+                        e,
+                      )
+                    }
+                  />
+                )}
                 {/* images already in the file: replace/delete without leaving the strip
                     (their paragraphs were display-only before imageEdits existed) */}
                 {img.parsedIndex !== undefined && !readOnly && (

@@ -471,6 +471,32 @@ export function App() {
     header: 0,
     footer: 0,
   })
+  /** in-place gap-copy editor: fixed overlay over the double-clicked strip's rect (never scrolls the viewport) */
+  const [gapHfEditor, setGapHfEditor] = useState<{
+    kind: 'header' | 'footer'
+    left: number
+    top: number
+    width: number
+  } | null>(null)
+  const gapHfEditorRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!gapHfEditor) return
+    const close = (e: Event) => {
+      const el = gapHfEditorRef.current
+      if (el && e.target instanceof Node && el.contains(e.target)) return
+      setGapHfEditor(null)
+    }
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setGapHfEditor(null)
+    }
+    // capture: the editing surface stops React-synthesized propagation
+    document.addEventListener('mousedown', close, true)
+    window.addEventListener('keydown', esc, true)
+    return () => {
+      document.removeEventListener('mousedown', close, true)
+      window.removeEventListener('keydown', esc, true)
+    }
+  }, [gapHfEditor])
   const [pageInfo, setPageInfo] = useState({ current: 1, total: 1 })
   // last page's number for the document-end footer: text for the page marker, num for
   // even/odd parity (section restarts / pageNumberFmt make both differ from the physical count)
@@ -1642,16 +1668,9 @@ export function App() {
       setShowPagePreview(true)
   }, [exportPdf])
 
-  useEffect(() => {
-    if (!showPagePreview || pendingMixedExportRef.current === false) return
-    const pending = pendingMixedExportRef.current
-    pendingMixedExportRef.current = false
-    const timer = window.setTimeout(() => {
-      void exportPdf(typeof pending === 'string' ? pending : undefined)
-    }, 1200)
-    return () => window.clearTimeout(timer)
-  }, [showPagePreview, exportPdf])
-
+  // Export-PDF is preview-first: the menu command opens the pagination preview
+  // and the user exports from its toolbar — no 1.2s auto-export that fired
+  // before the preview was even reviewed.
   const closePrintDialog = useCallback(() => {
     setShowPrintDialog(false)
     if (printAutoOpenedPreviewRef.current) {
@@ -3581,9 +3600,9 @@ export function App() {
    * Word-style edit entry: double-clicking a page's header/footer copy (the
    * display-only strips inside canvas page gaps are pointer-events:none, so
    * their own dblclick never fires — the bubbled event lands on the gap) opens
-   * the canvas editor on that page's variant. Word opens the footer you click;
-   * here the editor lives on the document's top/bottom strips, so the bump
-   * scrolls it in (focus) after the variant switch.
+   * an editor OVER that exact strip (fixed overlay at the copy's rect) — the
+   * viewport never jumps to the document's top/bottom strips. The canvas view
+   * switches to the clicked page's variant so the overlay edits its value.
    */
   const onGapHfCopyDblClick = (e: ReactMouseEvent) => {
     if (isProtected || readMode) return
@@ -3604,7 +3623,31 @@ export function App() {
     }
     const raw = strip.dataset.hfVariant
     setHfView(raw === 'first' || raw === 'even' ? raw : 'default')
-    setHfEditNonce((n) => ({ ...n, [kind]: n[kind] + 1 }))
+    const r = strip.getBoundingClientRect()
+    setGapHfEditor({ kind, left: r.left, top: r.top, width: r.width })
+  }
+
+  /** commit a new size for a strip image: re-embed the same bytes at the new extent */
+  const commitHfImageResize = (
+    kind: 'header' | 'footer',
+    index: number,
+    widthPx: number,
+    heightPx: number,
+  ) => {
+    const img = hfImagesOf(kind)?.find((im) => im.parsedIndex === index)
+    if (!img) return
+    const m = /^data:(image\/(?:png|jpeg|gif));base64,(.+)$/.exec(img.dataUrl)
+    if (!m) return
+    commitHfImageEdit(kind, {
+      index,
+      op: 'replace',
+      image: {
+        base64: m[2],
+        mime: m[1] as NewImage['mime'],
+        widthPx,
+        heightPx,
+      },
+    })
   }
 
   // Word: TOC entries jump on ⌘/Ctrl+click only; a plain click just places the
@@ -4346,6 +4389,9 @@ export function App() {
                           onReplaceImage={(index, img) =>
                             commitHfImageEdit('header', { index, op: 'replace', image: img })
                           }
+                          onResizeImage={(index, w, h) =>
+                            commitHfImageResize('header', index, w, h)
+                          }
                           pageTotal={pageInfo.total}
                           style={edgeHeaderStyle}
                           editNonce={hfEditNonce.header}
@@ -4389,11 +4435,72 @@ export function App() {
                           onReplaceImage={(index, img) =>
                             commitHfImageEdit('footer', { index, op: 'replace', image: img })
                           }
+                          onResizeImage={(index, w, h) =>
+                            commitHfImageResize('footer', index, w, h)
+                          }
                           pageNo={lastPageNo?.text ?? pageInfo.total}
                           pageTotal={pageInfo.total}
                           style={edgeFooterStyle}
                           editNonce={hfEditNonce.footer}
                         />
+                      )}
+                      {gapHfEditor && (
+                        <div
+                          ref={gapHfEditorRef}
+                          className="page-hf page-hf-overlay page-hf-editing"
+                          style={{
+                            position: 'fixed',
+                            left: gapHfEditor.left,
+                            top: gapHfEditor.top,
+                            width: gapHfEditor.width,
+                            zIndex: 60,
+                            background: 'var(--docs-paper)',
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          <HeaderFooterArea
+                            kind={gapHfEditor.kind}
+                            value={
+                              (gapHfEditor.kind === 'header' ? shownHeader : shownFooter) ?? {
+                                text: '',
+                              }
+                            }
+                            images={[
+                              ...(hfImagesOf(gapHfEditor.kind) ?? []),
+                              ...hfNewImagesOf(gapHfEditor.kind),
+                            ]}
+                            readOnly={isProtected || readMode}
+                            onCommit={(next) => {
+                              const kind = gapHfEditor.kind
+                              commitHf(kind, {
+                                ...next,
+                                images: (kind === 'header' ? shownHeader : shownFooter)?.images,
+                              })
+                              setGapHfEditor(null)
+                            }}
+                            onInsertImage={(img) => commitHfImage(gapHfEditor.kind, img)}
+                            onRemoveImage={(index) =>
+                              commitHfImageEdit(gapHfEditor.kind, { index, op: 'remove' })
+                            }
+                            onReplaceImage={(index, img) =>
+                              commitHfImageEdit(gapHfEditor.kind, {
+                                index,
+                                op: 'replace',
+                                image: img,
+                              })
+                            }
+                            onResizeImage={(index, w, h) =>
+                              commitHfImageResize(gapHfEditor.kind, index, w, h)
+                            }
+                            pageNo={
+                              gapHfEditor.kind === 'footer'
+                                ? (lastPageNo?.text ?? pageInfo.total)
+                                : undefined
+                            }
+                            pageTotal={pageInfo.total}
+                            editNonce={1}
+                          />
+                        </div>
                       )}
                       {(inkAnnotations.length > 0 || inkTool !== 'select') && !readMode && (
                         <InkOverlay

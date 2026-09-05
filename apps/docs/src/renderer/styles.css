@@ -2444,6 +2444,24 @@ th.cell-rev-del {
   pointer-events: auto;
 }
 
+.page-hf-imghandle {
+  position: absolute;
+  left: -5px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--word-blue);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-hf-imgwrap:hover .page-hf-imghandle {
+  opacity: 1;
+}
+
 .page-hf-imgtools button {
   display: inline-flex;
   align-items: center;

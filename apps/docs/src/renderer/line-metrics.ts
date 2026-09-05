@@ -1695,8 +1695,11 @@ export function estimateHfHeight(
   geom?: { marginTopPx: number; headerDistPx: number },
 ): number {
   const inlineImages = (images ?? []).filter((im) => !im.floating && im.heightPx)
+  // +12px: Word keeps a visible gap between the header content and the body
+  // (the strip renders a 12px margin under an image-only logo; text headers
+  // already carry their paragraph spacing through lineH)
   const imagesHeight =
-    inlineImages.length > 0 ? Math.max(...inlineImages.map((im) => im.heightPx!)) + 2 : 0
+    inlineImages.length > 0 ? Math.max(...inlineImages.map((im) => im.heightPx!)) + 14 : 0
   let anchoredPx = 0
   if (geom) {
     for (const im of images ?? []) {
