@@ -768,6 +768,13 @@ export const workbookRangeResultSchema = z
         /// Excel-encoded odd header/footer (&L/&C/&R sections, field codes).
         oddHeader: z.string().min(1).max(500).optional(),
         oddFooter: z.string().min(1).max(500).optional(),
+        /// Picture header (&G + <legacyDrawingHF>): resolved by the main
+        /// process from the sheet's VML drawing (mime + media bytes).
+        headerImage: z
+          .object({ mime: z.enum(['image/png', 'image/jpeg', 'image/gif']), base64: z.string() })
+          .strict()
+          .nullish()
+          .optional(),
       })
       .strict()
       .nullish()
@@ -2376,11 +2383,14 @@ export const workbookExportPdfRequestSchema = z
     scale: z.number().min(0.1).max(2),
     /// Chromium print header/footer templates (rendered in the margin
     /// boxes; `pageNumber`/`totalPages` spans resolve per page).
-    headerTemplate: z.string().min(1).max(50_000).optional(),
+    headerTemplate: z.string().min(1).max(2_000_000).optional(),
     footerTemplate: z.string().min(1).max(50_000).optional(),
     /// Chromium pageRanges subset to print, e.g. '1-3,5' (1-based, of the
     /// paginated output); absent = every page.
-    pageRanges: z.string().regex(/^[0-9][0-9,\-]{0,63}$/).optional(),
+    pageRanges: z
+      .string()
+      .regex(/^[0-9][0-9,\-]{0,63}$/)
+      .optional(),
   })
   .strict()
 

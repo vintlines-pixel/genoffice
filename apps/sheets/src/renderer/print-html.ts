@@ -265,9 +265,21 @@ th.hd { background: #f1f1f1; border: 0.5pt solid #b7b7b7; color: #444;
   const landscape = setup.orientation === 'landscape'
   const now = new Date()
   const baseName = fileName.replace(/\.pdf$/, '')
-  const headerTemplate = setup.header
-    ? buildHeaderFooterTemplate(setup.header, 'header', margins, baseName, sheetName, now)
-    : undefined
+  // Picture header (&G): Chromium renders the header template inside the top
+  // margin band, so the effective top margin widens to cover the image
+  // (capped) instead of clipping it. Text parts are replaced by the picture,
+  // like Excel draws &G in place of text sections that carry none.
+  const marginsForPrint = setup.headerImage
+    ? {
+        ...margins,
+        top: Math.min(Math.max(margins.top, margins.header + 1.15), margins.top + 1.15),
+      }
+    : margins
+  const headerTemplate = setup.headerImage
+    ? buildPictureHeaderTemplate(setup.headerImage)
+    : setup.header
+      ? buildHeaderFooterTemplate(setup.header, 'header', marginsForPrint, baseName, sheetName, now)
+      : undefined
   const footerTemplate = setup.footer
     ? buildHeaderFooterTemplate(setup.footer, 'footer', margins, baseName, sheetName, now)
     : undefined
@@ -276,11 +288,28 @@ th.hd { background: #f1f1f1; border: 0.5pt solid #b7b7b7; color: #444;
     html,
     landscape,
     pageSize,
-    margins: { top: margins.top, bottom: margins.bottom, left: margins.left, right: margins.right },
+    margins: {
+      top: marginsForPrint.top,
+      bottom: margins.bottom,
+      left: margins.left,
+      right: margins.right,
+    },
     scale: computeScale(setup, pageSize, landscape, margins, maxContentWidthPt),
     ...(headerTemplate === undefined ? {} : { headerTemplate }),
     ...(footerTemplate === undefined ? {} : { footerTemplate }),
   }
+}
+
+/// Picture header (&G) as a Chromium print template: a centered <img> drawn
+/// from the resolved media bytes. Chromium renders templates inside the top
+/// margin band — callers widen that band so the image fits.
+export function buildPictureHeaderTemplate(image: { mime: string; base64: string }): string {
+  return (
+    `<div style="width:100%; margin:0; padding:0; font-size:1px; line-height:1px;">` +
+    `<img src="data:${image.mime};base64,${image.base64}" ` +
+    `style="display:block; margin:0 auto; height:auto; width:auto; max-height:100px; max-width:100%;">` +
+    `</div>`
+  )
 }
 
 /// One left/center/right header or footer as a Chromium print template

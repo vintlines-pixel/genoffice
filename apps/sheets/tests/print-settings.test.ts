@@ -313,6 +313,7 @@ function payloadSetup(overrides: Partial<EffectivePageSetup>): EffectivePageSetu
     printTitles: null,
     header: null,
     footer: null,
+    headerImage: null,
     ...overrides,
   }
 }

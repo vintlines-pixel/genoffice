@@ -101,6 +101,7 @@ import { atomicWriteFile } from './atomic-write'
 import { closeGuardDecision } from './close-guard'
 import { SaveEditsTransferStore } from './save-edits-transfer'
 import { exportPdf, previewPdf } from './pdf-export'
+import { readSheetHeaderImage } from './xlsx-header-image'
 import { allowsAutomaticWorkbookRecovery } from './recovery-policy'
 import { setSystemShortDate, shortDatePatternForSystemLocale } from '../shared/short-date'
 import {
@@ -1250,6 +1251,8 @@ const tm = (key: Parameters<typeof tMain>[1], params?: Parameters<typeof tMain>[
 
 interface SessionInfo {
   readonly path: string
+  /// lazy per-sheet picture-header cache (set on first readWorkbookRange)
+  headerImageRead?: Set<string>
   /// Byte-for-byte copy of the file as it was opened (in the OS temp dir).
   /// Saves patch this snapshot rather than the live path, so an external
   /// overwrite of the file can never corrupt the save base — and Save As
@@ -2147,9 +2150,32 @@ export function registerSheetsIpc(): void {
   ipcMain.handle(IPC_CHANNELS.readWorkbookRange, async (event, input: unknown) => {
     const entry = sessionFor(event)
     const request = workbookRangeRequestSchema.parse(input)
-    if (!entry.sessions.has(request.sessionId)) throw new Error('Unknown workbook session.')
+    const info = entry.sessions.get(request.sessionId)
+    if (!info) throw new Error('Unknown workbook session.')
     const result = await entry.client.readRange(request)
-    return workbookRangeResultSchema.parse(result)
+    const parsed = workbookRangeResultSchema.parse(result)
+    // picture headers (&C&G + legacyDrawingHF) don't ride the sidecar's
+    // page setup — resolve them from the package once per sheet
+    if (parsed.pageSetup && parsed.pageSetup.headerImage === undefined && !info.headerImageRead) {
+      info.headerImageRead = new Set()
+    }
+    if (
+      parsed.pageSetup &&
+      parsed.pageSetup.headerImage === undefined &&
+      info.headerImageRead &&
+      !info.headerImageRead.has(request.sheetId)
+    ) {
+      const sheetName = info.sheetNames.get(request.sheetId)
+      if (sheetName && info.snapshotPath) {
+        const image: { mime: 'image/png' | 'image/jpeg' | 'image/gif'; base64: string } | null =
+          await readSheetHeaderImage(info.snapshotPath, sheetName).catch(() => null)
+        info.headerImageRead.add(request.sheetId)
+        if (image) parsed.pageSetup.headerImage = image
+      } else {
+        info.headerImageRead.add(request.sheetId)
+      }
+    }
+    return parsed
   })
 
   ipcMain.handle(IPC_CHANNELS.readWorkbookFormulas, async (event, input: unknown) => {

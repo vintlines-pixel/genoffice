@@ -43,6 +43,8 @@ export interface EffectivePageSetup {
   readonly printTitles: string | null
   readonly header: HeaderFooterParts | null
   readonly footer: HeaderFooterParts | null
+  /// Picture header (&G) resolved from the file's legacyDrawingHF, if any.
+  readonly headerImage: { mime: string; base64: string } | null
 }
 
 /// Inches, mirroring the gateway's margin presets.
@@ -174,7 +176,9 @@ export function resolveEffectivePageSetup(
       : file?.oddFooter !== undefined
         ? decodeHeaderFooter(file.oddFooter)
         : null
+  const headerImage = file?.headerImage ?? null
   return {
+    headerImage,
     orientation: journal.orientation ?? file?.orientation ?? 'portrait',
     paperSize: journal.paperSize ?? file?.paperSize ?? 9,
     scale: journal.scale ?? file?.scale ?? 100,

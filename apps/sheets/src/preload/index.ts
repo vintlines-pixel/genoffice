@@ -652,7 +652,9 @@ function parseWorkbookFile(input: unknown): WorkbookFile {
       typeof sheet.showGridLines !== 'boolean' ||
       (sheet.zoomScale !== undefined &&
         sheet.zoomScale !== null &&
-        (!isNonnegativeInteger(sheet.zoomScale) || sheet.zoomScale < 10 || sheet.zoomScale > 400)) ||
+        (!isNonnegativeInteger(sheet.zoomScale) ||
+          sheet.zoomScale < 10 ||
+          sheet.zoomScale > 400)) ||
       !Array.isArray(sheet.tables) ||
       !Array.isArray(sheet.comments) ||
       !Array.isArray(sheet.pivotRanges) ||
@@ -1303,6 +1305,7 @@ function parsePagePrintSettings(input: unknown): WorkbookRangeResult['pageSetup'
     ...(validated.printHeadings === undefined ? {} : { printHeadings: validated.printHeadings }),
     ...(validated.oddHeader === undefined ? {} : { oddHeader: validated.oddHeader }),
     ...(validated.oddFooter === undefined ? {} : { oddFooter: validated.oddFooter }),
+    ...(validated.headerImage === undefined ? {} : { headerImage: validated.headerImage }),
   }
 }
 
@@ -2004,8 +2007,8 @@ function isValidPdfPrintRequest(input: unknown): boolean {
     typeof input.scale === 'number' &&
     input.scale >= 0.1 &&
     input.scale <= 2 &&
-    (input.headerTemplate === undefined || isBoundedString(input.headerTemplate, 50_000)) &&
-    (input.footerTemplate === undefined || isBoundedString(input.footerTemplate, 50_000)) &&
+    (input.headerTemplate === undefined || isBoundedString(input.headerTemplate, 2_000_000)) &&
+    (input.footerTemplate === undefined || isBoundedString(input.footerTemplate, 2_000_000)) &&
     (input.pageRanges === undefined ||
       (typeof input.pageRanges === 'string' && /^[0-9][0-9,\-]{0,63}$/.test(input.pageRanges)))
   )
@@ -2036,8 +2039,8 @@ function isPageSetupState(input: unknown): boolean {
     const custom =
       isRecord(input.margins) &&
       Object.keys(input.margins).length === 6 &&
-      ['left', 'right', 'top', 'bottom', 'header', 'footer'].every(
-        (edge) => okEdge((input.margins as Record<string, unknown>)[edge]),
+      ['left', 'right', 'top', 'bottom', 'header', 'footer'].every((edge) =>
+        okEdge((input.margins as Record<string, unknown>)[edge]),
       )
     if (!preset && !custom) return false
   }

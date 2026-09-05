@@ -3827,6 +3827,24 @@ function captureSheetFileState(
   }
   if (!state.sheetFilePageSetups.has(sheetId) && result.pageSetup != null) {
     state.sheetFilePageSetups.set(sheetId, result.pageSetup)
+    if (result.pageSetup.headerImage === undefined && state.file.sessionId) {
+      // Picture headers (&G) don't ride the sidecar — the main process
+      // resolves them from the package. Indexing completion is often the
+      // LAST range read for a fully-visible sheet, so ask once more; the
+      // reply's pageSetup now carries headerImage (or a negative cache).
+      void window.desktopApi
+        .readWorkbookRange({
+          sessionId: state.file.sessionId,
+          sheetId,
+          range: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+        })
+        .then((again) => {
+          if (again.pageSetup?.headerImage != null) {
+            state.sheetFilePageSetups.set(sheetId, again.pageSetup)
+          }
+        })
+        .catch(() => {})
+    }
   }
   if (!state.sheetProtectedRanges.has(sheetId)) {
     // File coordinates → this session's screen space; later structural ops
