@@ -163,7 +163,13 @@ function applyMergeOp(xml: string, op: Extract<StructuralOp, { range: CellArea }
   }
   const element = `<mergeCell ref="${ref}"/>`
   if (xml.includes('</mergeCells>')) {
-    return refreshMergeCount(xml.replace('</mergeCells>', () => `${element}</mergeCells>`))
+    // Idempotent: when a structural op has already shifted the file's own
+    // mergeCell onto `ref` before the journal's unmerge(old) replay gets a
+    // chance to remove it, the pair's merge(new) must not stack a duplicate —
+    // duplicate/overlapping mergeCell entries make Excel's repair ambiguous
+    // and show as phantom merges after reopen.
+    const deduped = xml.replace(new RegExp(`<mergeCell\\b[^>]*\\bref="${ref}"[^>]*/>`), '')
+    return refreshMergeCount(deduped.replace('</mergeCells>', () => `${element}</mergeCells>`))
   }
   // Schema order places mergeCells after autoFilter (when present), which in
   // turn follows sheetData.
@@ -437,7 +443,14 @@ export function shiftDefinedNames(
       /(<definedName\b[^>]*>)([\s\S]*?)(<\/definedName>)/g,
       (_full, open: string, body: string, close: string) =>
         `${open}${escapeXmlText(
-          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true, 'a defined name'),
+          shiftFormulaText(
+            decodeEntities(body),
+            editedSheetName,
+            shift,
+            axis,
+            true,
+            'a defined name',
+          ),
         )}${close}`,
     )
   }
@@ -1027,7 +1040,14 @@ function transformFormulas(xml: string, sheetName: string, shift: Shift, axis: A
     (_full, rawAttributes: string | undefined, body: string) => {
       const attributes = rawAttributes ?? ''
       const rewritten = escapeXmlText(
-        shiftFormulaText(decodeEntities(body), sheetName, shift, axis, false, `sheet "${sheetName}"`),
+        shiftFormulaText(
+          decodeEntities(body),
+          sheetName,
+          shift,
+          axis,
+          false,
+          `sheet "${sheetName}"`,
+        ),
       )
       const newAttributes = attributes.replace(
         /(\bref=")([^"]*)(")/,

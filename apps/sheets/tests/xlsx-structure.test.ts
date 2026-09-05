@@ -187,6 +187,50 @@ describe('merge operations', () => {
     )
     expect(xml).toContain('<mergeCell ref="A9:D9"/>')
   })
+
+  it('a merge replayed onto an already-present ref does not stack a duplicate', async () => {
+    const xml = applyStructuralOps(
+      await fixtureWorksheet(),
+      [{ kind: 'merge-cells', range: { startRow: 4, endRow: 5, startColumn: 0, endColumn: 1 } }],
+      SHEET,
+    )
+    expect((xml.match(/<mergeCell ref="A5:B6"\/>/g) ?? []).length).toBe(1)
+    expect(xml).toContain('<mergeCells count="2">')
+  })
+
+  it('a merge op after a shift already moved the file merge onto its ref stays single', async () => {
+    // Univer's merge-cell controller journals remove(old)+add(new) pairs whose
+    // order versus the structural replay can invert: the insert shifts the
+    // file's A5:B6 onto A6:B7, then the journaled merge(A6:B7) replays. The
+    // merge must stay single (duplicate mergeCell entries are undefined
+    // behavior in Excel and render as phantom merges after reopen).
+    const xml = applyStructuralOps(
+      await fixtureWorksheet(),
+      [
+        { kind: 'insert-rows', index: 0, count: 1 },
+        { kind: 'merge-cells', range: { startRow: 5, endRow: 6, startColumn: 0, endColumn: 1 } },
+      ],
+      SHEET,
+    )
+    expect((xml.match(/<mergeCell ref="A6:B7"\/>/g) ?? []).length).toBe(1)
+    expect(xml).toContain('<mergeCells count="2">')
+  })
+
+  it('an unmerge with no matching ref is a harmless no-op', async () => {
+    const xml = applyStructuralOps(
+      await fixtureWorksheet(),
+      [
+        {
+          kind: 'unmerge-cells',
+          range: { startRow: 20, endRow: 21, startColumn: 0, endColumn: 1 },
+        },
+      ],
+      SHEET,
+    )
+    expect(xml).toContain('<mergeCells count="2">')
+    expect(xml).toContain('<mergeCell ref="A5:B6"/>')
+    expect(xml).toContain('<mergeCell ref="C1:D1"/>')
+  })
 })
 
 describe('cross-sheet reference rewriting', () => {
