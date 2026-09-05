@@ -920,6 +920,30 @@ function RibbonInner({
     if (!canEdit) return
     const m = /^data:(image\/(?:png|jpeg|gif));base64,(.*)$/s.exec(dataUrl)
     if (!m) return
+    // inline pictures: the engine synthesizes a fresh drawing only when the
+    // stored xml is cleared — otherwise the original bytes would win on save
+    if (editor.isActive('docInlineImage')) {
+      try {
+        const natural = await imageSizeOf(dataUrl)
+        const currentW =
+          Number(editor.getAttributes('docInlineImage')?.widthPx) || Math.min(natural.width, 620)
+        const w = Math.max(1, Math.round(currentW))
+        const h = Math.max(1, Math.round((currentW * natural.height) / natural.width))
+        editor
+          .chain()
+          .focus()
+          .updateAttributes('docInlineImage', {
+            dataUrl,
+            xml: '',
+            widthPx: w,
+            heightPx: h,
+          })
+          .run()
+      } catch {
+        /* image decode failed: keep the original untouched */
+      }
+      return
+    }
     const attrs = editor.getAttributes('docProtected')
     if (attrs?.blockType !== 'image') return
     try {
@@ -955,6 +979,16 @@ function RibbonInner({
     if (!picked) return
     await applyPictureBytes(`data:${picked.mime};base64,${picked.base64}`)
   }
+
+  useEffect(() => {
+    // dblclick on a body picture (docProtected image / docInlineImage) opens
+    // the replace flow — the selection was set by the dblclick handler
+    const open = () => {
+      if (canEdit) void replacePicture()
+    }
+    window.addEventListener('ai-docs-replace-picture', open)
+    return () => window.removeEventListener('ai-docs-replace-picture', open)
+  })
 
   const rotatePicture = (deltaDeg: number) => {
     if (!canEdit) return

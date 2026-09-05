@@ -576,10 +576,17 @@ export function LayoutTab({
             bottom: section.marginBottom,
             left: section.marginLeft,
           }}
+          hf={{
+            headerDist: section.headerDist ?? 720,
+            footerDist: section.footerDist ?? 720,
+          }}
           pageWidth={section.pageWidth}
           pageHeight={section.pageHeight}
-          onApply={(m) => {
+          onApply={(m, hfDist) => {
             applyMargins(m)
+            // header/footer distances apply even when untouched — the engine
+            // writes both attributes back to w:pgMar
+            onSection({ ...section, headerDist: hfDist.headerDist, footerDist: hfDist.footerDist })
             localStorage.setItem(LAST_CUSTOM_MARGINS_KEY, JSON.stringify(m))
           }}
           onClose={() => setMarginDialog(false)}

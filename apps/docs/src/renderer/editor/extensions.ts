@@ -2247,6 +2247,21 @@ export const ImageCopyExtension = Extension.create({
           handleDOMEvents: {
             copy: (view, event) => copyImage(view, event as ClipboardEvent, false),
             cut: (view, event) => copyImage(view, event as ClipboardEvent, true),
+            dblclick: (view, event) => {
+              const target = event.target as HTMLElement
+              const img = target?.closest?.('img.doc-protected-img, img.doc-inline-img')
+              if (!img) return false
+              // select the picture, then open the replace flow (Word's
+              // double-click opens picture formatting; here it's "swap bytes")
+              try {
+                const pos = view.posAtDOM(img, 0)
+                view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)))
+              } catch {
+                /* positioning failed — the replace still targets the active selection */
+              }
+              window.dispatchEvent(new CustomEvent('ai-docs-replace-picture'))
+              return false
+            },
           },
         },
       }),

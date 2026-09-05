@@ -114,6 +114,16 @@ export function buildSheetPrintPayload(
   }
   if (totalCells > MAX_PRINT_CELLS) throw new PrintError(t('appPrintTooLarge'))
 
+  // printable width for one page (pt); a column block that fits on it prints
+  // at true widths — everything past it lands on a follow-up page group, like
+  // Excel. Without this Chromium crushed every column into one page (narrow
+  // columns wrapped character-by-character and row heights exploded).
+  const paperWidthPt = (PAPER_WIDTH_INCHES[setup.paperSize] ?? 8.27) * 72
+  const availWidthPt = Math.max(
+    120,
+    paperWidthPt - (setup.margins.left + setup.margins.right) * 72 - rowHeaderPt,
+  )
+
   let maxContentWidthPt = 0
   const tables: string[] = []
   for (const area of areas) {
@@ -127,63 +137,113 @@ export function buildSheetPrintPayload(
       { length: columns },
       (_, offset) => worksheet.getColumnWidth(area.startColumn + offset) * 0.75,
     )
-    maxContentWidthPt = Math.max(
-      maxContentWidthPt,
-      rowHeaderPt + columnWidthsPt.reduce((total, width) => total + width, 0),
-    )
 
-    const bodyRow = (row: number): string => {
-      const cells: string[] = []
-      if (headings) {
-        cells.push(`<th class="hd">${row + 1}</th>`)
+    // split [startColumn..endColumn] into consecutive blocks that each fit the
+    // printable width (a lone oversized column still gets its own page)
+    const blocks: Array<{ start: number; end: number }> = []
+    {
+      let start = 0
+      let total = 0
+      for (let offset = 0; offset < columns; offset += 1) {
+        const width = columnWidthsPt[offset] ?? 0
+        if (total > 0 && total + width > availWidthPt) {
+          blocks.push({ start, end: offset - 1 })
+          start = offset
+          total = width
+        } else {
+          total += width
+        }
       }
-      for (let column = area.startColumn; column <= area.endColumn; column += 1) {
-        const key = `${row}:${column}`
-        if (merges.covered.has(key)) continue
-        const anchor = merges.anchors.get(key)
-        const span = anchor
-          ? ` rowspan="${Math.min(anchor.rows, area.endRow - row + 1)}"` +
-            ` colspan="${Math.min(anchor.columns, area.endColumn - column + 1)}"`
-          : ''
-        const inArea = row >= area.startRow && row <= area.endRow
-        const text = inArea
-          ? (display[row - area.startRow]?.[column - area.startColumn] ?? '')
-          : cellDisplay(worksheet, row, column)
-        const rawValue = inArea ? raw[row - area.startRow]?.[column - area.startColumn] : undefined
-        const style = worksheet.getRange(row, column).getCellStyleData()
-        cells.push(
-          `<td${span} style="${cellCss(style, rawValue, gridlines)}">${escapeHtml(text)}</td>`,
-        )
-      }
-      const heightPt = Math.max(worksheet.getRowHeight(row) * 0.75, 10)
-      return `<tr style="height:${round(heightPt)}pt">${cells.join('')}</tr>`
+      if (columns > 0) blocks.push({ start, end: columns - 1 })
     }
 
-    const headParts: string[] = []
-    if (headings) {
-      const letters = Array.from(
-        { length: columns },
-        (_, offset) => `<th class="hd">${columnLabel(area.startColumn + offset)}</th>`,
+    for (const block of blocks) {
+      const blockCols = block.end - block.start + 1
+      const blockWidths = columnWidthsPt.slice(block.start, block.end + 1)
+      maxContentWidthPt = Math.max(
+        maxContentWidthPt,
+        rowHeaderPt + blockWidths.reduce((total, width) => total + width, 0),
       )
-      headParts.push(`<tr><th class="hd"></th>${letters.join('')}</tr>`)
-    }
-    if (titles) {
-      for (let row = titles.start; row <= titles.end; row += 1) headParts.push(bodyRow(row))
-    }
 
-    const bodyParts: string[] = []
-    for (let row = area.startRow; row <= area.endRow; row += 1) {
-      // Title rows already repeat via the table header.
-      if (titles && row >= titles.start && row <= titles.end) continue
-      bodyParts.push(bodyRow(row))
-    }
+      const bodyRow = (row: number): string => {
+        const cells: string[] = []
+        if (headings) {
+          cells.push(`<th class="hd">${row + 1}</th>`)
+        }
+        for (let column = block.start; column <= block.end; column += 1) {
+          const key = `${row}:${column}`
+          if (merges.covered.has(key)) {
+            // covered by a merge anchored in an EARLIER block: the merge's
+            // columns print there — keep the grid honest with an empty cell
+            const coveredHere = [...merges.anchors.entries()].some(([anchorKey, size]) => {
+              const parts = anchorKey.split(':')
+              const mRow = Number(parts[0])
+              const mCol = Number(parts[1])
+              return (
+                mRow <= row &&
+                row < mRow + size.rows &&
+                mCol <= column &&
+                column < mCol + size.columns &&
+                mCol >= block.start
+              )
+            })
+            if (!coveredHere) {
+              const style = worksheet.getRange(row, column).getCellStyleData()
+              cells.push(`<td style="${cellCss(style, undefined, gridlines)}"></td>`)
+            }
+            continue
+          }
+          const anchor = merges.anchors.get(key)
+          const span = anchor
+            ? ` rowspan="${Math.min(anchor.rows, area.endRow - row + 1)}"` +
+              ` colspan="${Math.min(
+                Math.min(anchor.columns, area.endColumn - column + 1),
+                block.end - column + 1,
+              )}"`
+            : ''
+          const inArea = row >= area.startRow && row <= area.endRow
+          const text = inArea
+            ? (display[row - area.startRow]?.[column - area.startColumn] ?? '')
+            : cellDisplay(worksheet, row, column)
+          const rawValue = inArea
+            ? raw[row - area.startRow]?.[column - area.startColumn]
+            : undefined
+          const style = worksheet.getRange(row, column).getCellStyleData()
+          cells.push(
+            `<td${span} style="${cellCss(style, rawValue, gridlines)}">${escapeHtml(text)}</td>`,
+          )
+        }
+        const heightPt = Math.max(worksheet.getRowHeight(row) * 0.75, 10)
+        return `<tr style="height:${round(heightPt)}pt">${cells.join('')}</tr>`
+      }
 
-    const colgroup = `<colgroup>${headings ? `<col style="width:${rowHeaderPt}pt">` : ''}${columnWidthsPt
-      .map((width) => `<col style="width:${round(width)}pt">`)
-      .join('')}</colgroup>`
-    tables.push(
-      `<table>${colgroup}<thead>${headParts.join('')}</thead><tbody>${bodyParts.join('')}</tbody></table>`,
-    )
+      const headParts: string[] = []
+      if (headings) {
+        const letters = Array.from(
+          { length: blockCols },
+          (_, offset) =>
+            `<th class="hd">${columnLabel(area.startColumn + block.start + offset)}</th>`,
+        )
+        headParts.push(`<tr><th class="hd"></th>${letters.join('')}</tr>`)
+      }
+      if (titles) {
+        for (let row = titles.start; row <= titles.end; row += 1) headParts.push(bodyRow(row))
+      }
+
+      const bodyParts: string[] = []
+      for (let row = area.startRow; row <= area.endRow; row += 1) {
+        // Title rows already repeat via the table header.
+        if (titles && row >= titles.start && row <= titles.end) continue
+        bodyParts.push(bodyRow(row))
+      }
+
+      const colgroup = `<colgroup>${headings ? `<col style="width:${rowHeaderPt}pt">` : ''}${blockWidths
+        .map((width) => `<col style="width:${round(width)}pt">`)
+        .join('')}</colgroup>`
+      tables.push(
+        `<table>${colgroup}<thead>${headParts.join('')}</thead><tbody>${bodyParts.join('')}</tbody></table>`,
+      )
+    }
   }
 
   const html =

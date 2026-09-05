@@ -21,6 +21,7 @@ import { Dropdown, isSymbolFontFamily, type DropdownOption } from '@genoffice/ui
 import { useI18n, type StringKey } from '../i18n/locale'
 import { fontFamiliesFor, isEastAsianFontName } from '../font-list'
 import { useSystemFontFamilies } from '../system-fonts'
+import { imageSizeOf } from './ribbon-tabs'
 import { cssFontFamily } from '../line-metrics'
 import { setParaAttrs, activeParaAttrs } from './ribbon-tabs'
 import { setSelectionAlign } from '../editor/direction'
@@ -199,9 +200,7 @@ export function EditorContextMenu({
     // inline images carry only EMU offsets; block images also have posH/posV
     const cleared = wrap === null ? { imageOffsetXEmu: null, imageOffsetYEmu: null } : {}
     const clearedPosition =
-      imageNode === 'docProtected' && wrap === null
-        ? { imagePosH: null, imagePosV: null }
-        : {}
+      imageNode === 'docProtected' && wrap === null ? { imagePosH: null, imagePosV: null } : {}
     editor
       .chain()
       .focus()
@@ -494,6 +493,85 @@ export function EditorContextMenu({
               </div>
             )}
           </div>
+          {isImage && (
+            <>
+              <div className="ctx-sep" />
+              {item(t('ribbonReplacePicture'), {
+                onClick: () => {
+                  void (async () => {
+                    const picked = await window.desktop.pickImage()
+                    if (!picked) return
+                    const dataUrl = `data:${picked.mime};base64,${picked.base64}`
+                    if (isInlineImage) {
+                      try {
+                        const natural = await imageSizeOf(dataUrl)
+                        const attrs = editor.getAttributes('docInlineImage')
+                        const w = Math.max(
+                          1,
+                          Math.round(Number(attrs?.widthPx) || Math.min(natural.width, 620)),
+                        )
+                        editor
+                          .chain()
+                          .focus()
+                          .updateAttributes('docInlineImage', {
+                            dataUrl,
+                            xml: '',
+                            widthPx: w,
+                            heightPx: Math.max(1, Math.round((w * natural.height) / natural.width)),
+                          })
+                          .run()
+                      } catch {
+                        /* decode failed: keep the original */
+                      }
+                      return
+                    }
+                    try {
+                      const natural = await imageSizeOf(dataUrl)
+                      const attrs = editor.getAttributes('docProtected')
+                      const w = Math.max(
+                        1,
+                        Math.round(Number(attrs?.imageWidthPx) || Math.min(natural.width, 620)),
+                      )
+                      const original =
+                        Number(attrs?.docxIndex) > 0 || Number(attrs?.docxIndex) === 0
+                      editor
+                        .chain()
+                        .focus()
+                        .updateAttributes('docProtected', {
+                          imageDataUrl: dataUrl,
+                          imageWidthPx: w,
+                          imageHeightPx: Math.max(
+                            1,
+                            Math.round((w * natural.height) / natural.width),
+                          ),
+                          imageCrop: null,
+                          imageFillRect: null,
+                          ...(original
+                            ? { imageReplace: { base64: picked.base64, mime: picked.mime } }
+                            : {
+                                genImage: {
+                                  base64: picked.base64,
+                                  mime: picked.mime,
+                                  widthPx: w,
+                                  heightPx: Math.max(
+                                    1,
+                                    Math.round((w * natural.height) / natural.width),
+                                  ),
+                                },
+                              }),
+                        })
+                        .run()
+                    } catch {
+                      /* decode failed: keep the original */
+                    }
+                  })()
+                },
+              })}
+              {item(t('appHfImageRemove'), {
+                onClick: run(() => editor.chain().focus().deleteSelection().run()),
+              })}
+            </>
+          )}
           {isBlockImage && (
             <div className="ctx-item-wrap" onMouseLeave={() => setSubmenu(null)}>
               {item(t('appArrangeMenu'), { submenuKey: 'arrange' })}

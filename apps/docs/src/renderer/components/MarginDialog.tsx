@@ -9,6 +9,12 @@ export interface PageMargins {
   left: number
 }
 
+/** header/footer distance from the paper edge (w:pgMar w:header / w:footer) */
+export interface HfDistances {
+  headerDist: number
+  footerDist: number
+}
+
 const TWIPS_PER_CM = 1440 / 2.54
 /** Word rejects margins that leave less than about one inch of body */
 const MIN_BODY_TWIPS = 1440
@@ -41,13 +47,16 @@ export function MarginDialog({
   margins,
   pageWidth,
   pageHeight,
+  hf,
   onApply,
   onClose,
 }: {
   margins: PageMargins
   pageWidth: number
   pageHeight: number
-  onApply: (next: PageMargins) => void
+  /** current header/footer edge distances; omitted → the dialog still shows the Word default (1.27cm) */
+  hf?: HfDistances
+  onApply: (next: PageMargins, hfDist: HfDistances) => void
   onClose: () => void
 }) {
   const { t } = useI18n()
@@ -56,6 +65,12 @@ export function MarginDialog({
     bottom: String(cmFromTwips(margins.bottom)),
     left: String(cmFromTwips(margins.left)),
     right: String(cmFromTwips(margins.right)),
+  })
+  const engineDefaultHf: HfDistances = { headerDist: 720, footerDist: 720 }
+  const baseHf = hf ?? engineDefaultHf
+  const [hfValues, setHfValues] = useState<HfDistances>({
+    headerDist: baseHf.headerDist,
+    footerDist: baseHf.footerDist,
   })
   const modalKeys = useModalKeys(onClose)
 
@@ -70,7 +85,10 @@ export function MarginDialog({
 
   const submit = () => {
     if (tooLarge) return
-    onApply(next)
+    onApply(next, {
+      headerDist: twipsFromCmInput(String(cmFromTwips(hfValues.headerDist)), hfValues.headerDist),
+      footerDist: twipsFromCmInput(String(cmFromTwips(hfValues.footerDist)), hfValues.footerDist),
+    })
     onClose()
   }
 
@@ -90,6 +108,35 @@ export function MarginDialog({
     </label>
   )
 
+  const hfField = ([key, labelKey]: ['headerDist' | 'footerDist', StringKey]) => {
+    const cm = cmFromTwips(hfValues[key])
+    return (
+      <label key={key}>
+        {t(labelKey)} (cm)
+        <input
+          type="number"
+          min={0}
+          step={0.1}
+          value={cm}
+          onChange={(e) =>
+            setHfValues((v) => ({
+              ...v,
+              [key]: twipsFromCmInput(e.target.value, hfValues[key]),
+            }))
+          }
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit()
+          }}
+        />
+      </label>
+    )
+  }
+
+  const HF_FIELDS: Array<['headerDist' | 'footerDist', StringKey]> = [
+    ['headerDist', 'ribbonMarginHeader'],
+    ['footerDist', 'ribbonMarginFooter'],
+  ]
+
   return (
     <div
       className="modal-backdrop"
@@ -101,6 +148,7 @@ export function MarginDialog({
         <h2>{t('ribbonMarginDialogTitle')}</h2>
         <div className="modal-row margin-row">{SIDES.slice(0, 2).map(field)}</div>
         <div className="modal-row margin-row">{SIDES.slice(2).map(field)}</div>
+        <div className="modal-row margin-row">{HF_FIELDS.map(hfField)}</div>
         {tooLarge && <div className="modal-error">{t('ribbonMarginTooLarge')}</div>}
         <div className="modal-actions">
           <button className="btn-ghost" onClick={onClose}>
