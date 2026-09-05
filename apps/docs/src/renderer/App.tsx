@@ -3011,8 +3011,23 @@ export function App() {
       }
       locate()
     }
+    let enterNext = false
+    // Enter at a page tail adds an invisible trailing paragraph: the transaction
+    // mapping slides the next page's gap down one line, and the 300ms-debounced
+    // remeasure only then restores the band's position — a visible down-and-back
+    // jump per keypress. Enter is a discrete key, so remeasure immediately and
+    // skip the broken mapped state entirely.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.isComposing) enterNext = true
+    }
+    (scroller as HTMLElement).addEventListener('keydown', onKey, true)
     const onUpdate = () => {
       if (timer) window.clearTimeout(timer)
+      if (enterNext) {
+        enterNext = false
+        remeasure()
+        return
+      }
       timer = window.setTimeout(remeasure, 300)
     }
     remeasure()
@@ -3030,6 +3045,7 @@ export function App() {
       if (timer) window.clearTimeout(timer)
       document.fonts.removeEventListener('loadingdone', onFontsChanged)
       scroller.removeEventListener('scroll', locate)
+      ;(scroller as HTMLElement).removeEventListener('keydown', onKey, true)
       editor?.off('update', onUpdate)
     }
   }, [
