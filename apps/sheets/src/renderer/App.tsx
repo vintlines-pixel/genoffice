@@ -4407,6 +4407,9 @@ export function App(): React.JSX.Element {
   menuActionRef.current = (action) => {
     if (action === 'open') {
       void handleInspectWorkbook()
+    } else if (action === 'print') {
+      const payload = buildActiveSheetPdfPayloadImpl(pageLayoutContext())
+      if (payload !== null) void window.desktopApi.printWorkbook(payload)
     } else if (action === 'export-pdf') {
       openExportPdfDialog()
     } else if (action === 'export-csv') {
@@ -4509,17 +4512,14 @@ export function App(): React.JSX.Element {
     const worksheet = univerRef.current?.univerAPI.getActiveWorkbook()?.getActiveSheet()
     const workbookState = lazyWorkbookRef.current
     const sheetId = worksheet?.getSheetId()
-    const journalState = sheetId
-      ? (workbookState?.editJournal.pageSetup.get(sheetId) ?? {})
-      : {}
+    const journalState = sheetId ? (workbookState?.editJournal.pageSetup.get(sheetId) ?? {}) : {}
     // Dialog prefills resolve journal edits over the file's saved settings:
     // prefilling from the journal alone showed an empty Header & Footer
     // dialog for files that already had one (and OK then journaled null,
     // wiping it on save), and the margins dialog must prefill the values
     // that are actually in effect.
-    const effective = sheetId && workbookState
-      ? resolveSheetEffectiveSetup(workbookState, sheetId)
-      : null
+    const effective =
+      sheetId && workbookState ? resolveSheetEffectiveSetup(workbookState, sheetId) : null
     return {
       ...journalState,
       ...(effective === null

@@ -251,6 +251,14 @@ const desktopApi: DesktopApi = {
     }
     return result as { canceled: true } | { canceled: false; path: string }
   },
+  async printWorkbook(request) {
+    if (!isValidPdfPrintRequest(request)) throw new Error('Invalid PDF export request.')
+    const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.printWorkbook, request)
+    if (!isRecord(result) || typeof result.ok !== 'boolean') {
+      throw new Error('Invalid PDF print response.')
+    }
+    return result as { ok: boolean; error?: string }
+  },
   async previewPdf(request) {
     if (!isValidPdfPrintRequest(request)) throw new Error('Invalid PDF export request.')
     const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.previewPdf, request)
@@ -316,6 +324,7 @@ const desktopApi: DesktopApi = {
         action === 'open' ||
         action === 'save' ||
         action === 'save-as' ||
+        action === 'print' ||
         action === 'export-pdf' ||
         action === 'export-csv' ||
         action === 'undo' ||

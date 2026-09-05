@@ -100,7 +100,7 @@ import { IPC_CHANNELS } from '../shared/ipc-channels'
 import { atomicWriteFile } from './atomic-write'
 import { closeGuardDecision } from './close-guard'
 import { SaveEditsTransferStore } from './save-edits-transfer'
-import { exportPdf, previewPdf } from './pdf-export'
+import { exportPdf, previewPdf, printWorkbook } from './pdf-export'
 import { readSheetHeaderImage } from './xlsx-header-image'
 import { allowsAutomaticWorkbookRecovery } from './recovery-policy'
 import { setSystemShortDate, shortDatePatternForSystemLocale } from '../shared/short-date'
@@ -154,6 +154,7 @@ const tMain = createI18n({
     menuSave: '保存',
     menuSaveAs: '另存为…',
     menuExportPdf: '导出 PDF…',
+    menuPrint: '打印…',
     menuClose: '关闭',
     menuQuit: '退出',
     menuEdit: '编辑',
@@ -210,6 +211,7 @@ const tMain = createI18n({
     menuSave: 'Save',
     menuSaveAs: 'Save As…',
     menuExportPdf: 'Export PDF…',
+    menuPrint: 'Print…',
     menuClose: 'Close',
     menuQuit: 'Quit',
     menuEdit: 'Edit',
@@ -270,6 +272,7 @@ const tMain = createI18n({
     menuSave: '保存',
     menuSaveAs: '名前を付けて保存…',
     menuExportPdf: 'PDF をエクスポート…',
+    menuPrint: '印刷…',
     menuClose: '閉じる',
     menuQuit: '終了',
     menuEdit: '編集',
@@ -331,6 +334,7 @@ const tMain = createI18n({
     menuSave: '저장',
     menuSaveAs: '다른 이름으로 저장…',
     menuExportPdf: 'PDF 내보내기…',
+    menuPrint: '인쇄…',
     menuClose: '닫기',
     menuQuit: '끝내기',
     menuEdit: '편집',
@@ -392,6 +396,7 @@ const tMain = createI18n({
     menuSave: 'Enregistrer',
     menuSaveAs: 'Enregistrer sous…',
     menuExportPdf: 'Exporter en PDF…',
+    menuPrint: 'Imprimer…',
     menuClose: 'Fermer',
     menuQuit: 'Quitter',
     menuEdit: 'Édition',
@@ -454,6 +459,7 @@ const tMain = createI18n({
     menuSave: 'Speichern',
     menuSaveAs: 'Speichern unter…',
     menuExportPdf: 'PDF exportieren…',
+    menuPrint: 'Drucken…',
     menuClose: 'Schließen',
     menuQuit: 'Beenden',
     menuEdit: 'Bearbeiten',
@@ -514,6 +520,7 @@ const tMain = createI18n({
     menuSave: 'Guardar',
     menuSaveAs: 'Guardar como…',
     menuExportPdf: 'Exportar a PDF…',
+    menuPrint: 'Imprimir…',
     menuClose: 'Cerrar',
     menuQuit: 'Salir',
     menuEdit: 'Edición',
@@ -574,6 +581,7 @@ const tMain = createI18n({
     menuSave: 'บันทึก',
     menuSaveAs: 'บันทึกเป็น…',
     menuExportPdf: 'ส่งออก PDF…',
+    menuPrint: 'พิมพ์…',
     menuClose: 'ปิด',
     menuQuit: 'ออก',
     menuEdit: 'แก้ไข',
@@ -632,6 +640,7 @@ const tMain = createI18n({
     menuSave: 'Simpan',
     menuSaveAs: 'Simpan Sebagai…',
     menuExportPdf: 'Ekspor PDF…',
+    menuPrint: 'Cetak…',
     menuClose: 'Tutup',
     menuQuit: 'Keluar',
     menuEdit: 'Edit',
@@ -692,6 +701,7 @@ const tMain = createI18n({
     menuSave: 'Сохранить',
     menuSaveAs: 'Сохранить как…',
     menuExportPdf: 'Экспорт в PDF…',
+    menuPrint: 'Печать…',
     menuClose: 'Закрыть',
     menuQuit: 'Выход',
     menuEdit: 'Правка',
@@ -751,6 +761,7 @@ const tMain = createI18n({
     menuSave: 'حفظ',
     menuSaveAs: 'حفظ باسم…',
     menuExportPdf: 'تصدير PDF…',
+    menuPrint: 'اطبع…',
     menuClose: 'إغلاق',
     menuQuit: 'إنهاء',
     menuEdit: 'تحرير',
@@ -809,6 +820,7 @@ const tMain = createI18n({
     menuSave: 'Salvar',
     menuSaveAs: 'Salvar Como…',
     menuExportPdf: 'Exportar PDF…',
+    menuPrint: 'Imprimir…',
     menuClose: 'Fechar',
     menuQuit: 'Sair',
     menuEdit: 'Editar',
@@ -870,6 +882,7 @@ const tMain = createI18n({
     menuSave: 'Salva',
     menuSaveAs: 'Salva con nome…',
     menuExportPdf: 'Esporta PDF…',
+    menuPrint: 'Stampa…',
     menuClose: 'Chiudi',
     menuQuit: 'Esci',
     menuEdit: 'Modifica',
@@ -930,6 +943,7 @@ const tMain = createI18n({
     menuSave: 'Zapisz',
     menuSaveAs: 'Zapisz jako…',
     menuExportPdf: 'Eksportuj PDF…',
+    menuPrint: 'Drukuj…',
     menuClose: 'Zamknij',
     menuQuit: 'Zakończ',
     menuEdit: 'Edycja',
@@ -991,6 +1005,7 @@ const tMain = createI18n({
     menuSave: 'Opslaan',
     menuSaveAs: 'Opslaan als…',
     menuExportPdf: 'PDF exporteren…',
+    menuPrint: 'Afdrukken…',
     menuClose: 'Sluiten',
     menuQuit: 'Stoppen',
     menuEdit: 'Bewerken',
@@ -1050,6 +1065,7 @@ const tMain = createI18n({
     menuSave: 'Simpan',
     menuSaveAs: 'Simpan Sebagai…',
     menuExportPdf: 'Eksport PDF…',
+    menuPrint: 'Cetak…',
     menuClose: 'Tutup',
     menuQuit: 'Keluar',
     menuEdit: 'Edit',
@@ -1109,6 +1125,7 @@ const tMain = createI18n({
     menuSave: 'שמירה',
     menuSaveAs: 'שמירה בשם…',
     menuExportPdf: 'ייצוא PDF…',
+    menuPrint: 'הדפס…',
     menuClose: 'סגירה',
     menuQuit: 'יציאה',
     menuEdit: 'עריכה',
@@ -1167,6 +1184,7 @@ const tMain = createI18n({
     menuSave: 'सहेजें',
     menuSaveAs: 'इस रूप में सहेजें…',
     menuExportPdf: 'PDF निर्यात करें…',
+    menuPrint: 'प्रिंट करें…',
     menuClose: 'बंद करें',
     menuQuit: 'बाहर निकलें',
     menuEdit: 'संपादन',
@@ -1225,6 +1243,7 @@ const tMain = createI18n({
     menuSave: '儲存',
     menuSaveAs: '另存新檔…',
     menuExportPdf: '匯出 PDF…',
+    menuPrint: '列印…',
     menuClose: '關閉',
     menuQuit: '結束',
     menuEdit: '編輯',
@@ -1482,7 +1501,7 @@ export function setSheetsWorkbookOpenedHook(
 
 /** forward an application-menu File command into the sheets renderer */
 export function sendSheetsMenuAction(
-  action: 'open' | 'save' | 'save-as' | 'export-pdf' | 'export-csv' | 'undo' | 'redo',
+  action: 'open' | 'save' | 'save-as' | 'print' | 'export-pdf' | 'export-csv' | 'undo' | 'redo',
 ): void {
   activeSheetsWebContents?.send(IPC_CHANNELS.menuAction, action)
 }
@@ -1655,6 +1674,7 @@ function startCaptureServer(): void {
         action === 'open' ||
         action === 'save' ||
         action === 'save-as' ||
+        action === 'print' ||
         action === 'export-pdf' ||
         action === 'export-csv' ||
         action === 'undo' ||
@@ -2397,6 +2417,12 @@ export function registerSheetsIpc(): void {
     sessionFor(event)
     const request = workbookExportPdfRequestSchema.parse(input)
     return previewPdf(request)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.printWorkbook, async (event, input: unknown) => {
+    sessionFor(event)
+    const request = workbookExportPdfRequestSchema.parse(input)
+    return printWorkbook(event, request)
   })
 
   ipcMain.handle(IPC_CHANNELS.exportCsv, async (event, input: unknown) => {
@@ -3404,6 +3430,11 @@ function installApplicationMenu(): void {
             label: tm('menuSaveAs'),
             accelerator: 'Shift+CmdOrCtrl+S',
             click: () => sendMenuAction('save-as'),
+          },
+          {
+            label: tm('menuPrint'),
+            accelerator: 'CmdOrCtrl+P',
+            click: () => sendMenuAction('print'),
           },
           {
             label: tm('menuExportPdf'),

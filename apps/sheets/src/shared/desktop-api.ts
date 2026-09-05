@@ -2549,6 +2549,8 @@ export interface DesktopApi {
   /// Renders the payload to a throwaway PDF and shows it in the built-in
   /// preview window; never writes a user-visible file.
   previewPdf(request: WorkbookExportPdfRequest): Promise<WorkbookPreviewPdfResult>
+  /// Renders the payload in a hidden window and opens the system print dialog.
+  printWorkbook(request: WorkbookExportPdfRequest): Promise<{ ok: boolean; error?: string }>
   exportCsv(request: WorkbookExportCsvRequest): Promise<WorkbookExportCsvResult>
   /// First Save of a CSV session: native "keep this format?" dialog.
   confirmCsvSave(): Promise<'csv' | 'xlsx' | 'cancel'>
@@ -2611,7 +2613,8 @@ export interface DesktopApi {
   getPathForFile(file: File): string
 }
 
-export type MenuAction = 'open' | 'save' | 'save-as' | 'export-pdf' | 'export-csv' | 'undo' | 'redo'
+export type MenuAction =
+  'open' | 'save' | 'save-as' | 'print' | 'export-pdf' | 'export-csv' | 'undo' | 'redo'
 
 export interface WebSearchResult {
   results: Array<{ title: string; url: string; snippet: string }>

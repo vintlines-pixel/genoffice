@@ -82,6 +82,48 @@ export async function exportPdf(
   })
 }
 
+/**
+ * Print via the system dialog: the print HTML renders in a hidden window and
+ * webContents.print() opens Chromium's dialog over the calling window. The
+ * paper size/orientation come from the payload's print options; margins are
+ * zero because the HTML already lays out with the workbook's own margins.
+ */
+export async function printWorkbook(
+  event: IpcMainInvokeEvent,
+  request: WorkbookExportPdfRequest,
+): Promise<{ ok: boolean; error?: string }> {
+  // test-drivers read this back via app.evaluate (the system dialog blocks
+  // automation until dismissed, so a side-effect marker is the only evidence)
+  ;(globalThis as { __printInvoked?: boolean }).__printInvoked = true
+  const parent = BrowserWindow.fromWebContents(event.sender)
+  return withPrintWindow(
+    request,
+    (window) =>
+      new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        window.webContents.print(
+          {
+            silent: false,
+            printBackground: true,
+            margins: { marginType: 'none' },
+            landscape: request.landscape,
+            ...(typeof request.pageSize === 'string' ? {} : { pageSize: request.pageSize }),
+          },
+          (success, failureReason) => {
+            resolve({
+              ok: success,
+              ...(failureReason && !/cancel|canceled/i.test(failureReason)
+                ? { error: failureReason }
+                : {}),
+            })
+          },
+        )
+        // Chromium anchors the print dialog to the focused window: keep the
+        // caller's window in front so the dialog lands on the workbook
+        parent?.focus()
+      }),
+  )
+}
+
 /// The persistent preview window; one at a time, reused across previews.
 let previewWindow: BrowserWindow | null = null
 let previewPdfPath: string | null = null
