@@ -487,6 +487,18 @@ export interface NumberingDef {
   startOverrides: Record<number, number>
 }
 
+/**
+ * Edit of one already-in-the-file header/footer image (parsed `images[]`
+ * order). Renderer-added; parse never sets this.
+ */
+export interface HfImageEdit {
+  /** 0-based index into the part's parsed images (drawing order, then pict order) */
+  index: number
+  op: 'remove' | 'replace'
+  /** replace: the new image; the original paragraph's formatting is kept */
+  image?: NewImage
+}
+
 /** Content for the default page header / footer. */
 export interface HeaderFooter {
   text: string
@@ -505,6 +517,13 @@ export interface HeaderFooter {
    * this — parsed images stay display-only and their bytes are preserved.
    */
   images?: NewImage[]
+  /**
+   * Removals/replacements of images already in the part. Removal drops the
+   * image's drawing run (whole paragraph when it held only that image);
+   * replacement swaps the drawing run and keeps the paragraph's own
+   * formatting. Later entries for the same index win.
+   */
+  imageEdits?: HfImageEdit[]
 }
 
 /** Placeholder for NUMPAGES (total pages) fields in headers/footers; the renderer substitutes the total page count and saving writes the field back (PAGE uses PAGE_MARK the same way) */

@@ -198,13 +198,16 @@ export function hfLeadIndentCss(layout: HfTabLayout): string | null {
     : `max(0px, calc(50% - ${(s.lineEndPx / 2).toFixed(1)}px))`
 }
 
-/** effective paragraphs: rich paras when present, else the legacy single line (mirrors HeaderFooterArea) */
+/** effective paragraphs: rich paras when present, else the legacy single line (mirrors HeaderFooterArea).
+ *  An image-only part (logo header) yields no paragraphs: the legacy fallback would render
+ *  a stray blank line over the body's first paragraph on every page gap. */
 function parasOf(value: HeaderFooter): HfParagraph[] {
   if (value.paras?.length) return value.paras
   const runs: Run[] = value.text ? [{ text: value.text }] : []
   if (value.pageNumber && !value.text.includes('#') && !value.text.includes(PAGE_MARK)) {
     runs.push({ text: runs.length > 0 ? ` ${PAGE_MARK}` : PAGE_MARK })
   }
+  if (runs.length === 0 && (value.images?.length ?? 0) > 0) return []
   return [{ align: 'center', runs }]
 }
 

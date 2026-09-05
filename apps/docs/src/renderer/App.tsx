@@ -47,7 +47,7 @@ import { addQueueAnchor, clearQueueAnchors, removeQueueAnchors } from './editor/
 import { asianCharCount, countWords, nonAsianWordCount } from './word-count'
 import { CommentsPanel } from './components/CommentsPanel'
 import { EquationModal } from './components/EquationModal'
-import { HeaderFooterArea } from './components/HeaderFooterArea'
+import { HeaderFooterArea, type HfStripImage } from './components/HeaderFooterArea'
 import { PageFootnotes, PageEndnotes } from './components/PageNoteAreas'
 import { PaginationPreview } from './components/PaginationPreview'
 import { PrintDialog } from './components/PrintDialog'
@@ -466,6 +466,11 @@ export function App() {
     setHfViewState(v)
     setHfViewTouched(true)
   }
+  /** bump counter that opens the canvas header/footer editor externally (double-click on a gap's display-only copy) */
+  const [hfEditNonce, setHfEditNonce] = useState<{ header: number; footer: number }>({
+    header: 0,
+    footer: 0,
+  })
   const [pageInfo, setPageInfo] = useState({ current: 1, total: 1 })
   // last page's number for the document-end footer: text for the page marker, num for
   // even/odd parity (section restarts / pageNumberFmt make both differ from the physical count)
@@ -536,7 +541,7 @@ export function App() {
           ? sectionHfValue('footer')
           : footer
   /** images of the part in the current view (logos etc., display-only; the save path keeps their bytes untouched) */
-  const hfImagesOf = (kind: 'header' | 'footer') => {
+  const hfImagesOf = (kind: 'header' | 'footer'): HfStripImage[] | undefined => {
     const parsed = doc?.parsed
     if (!parsed) return undefined
     const raw = (() => {
@@ -554,11 +559,33 @@ export function App() {
       }
       return (kind === 'header' ? parsed.headerImages : parsed.footerImages) ?? undefined
     })()
-    // floating shapes (watermarks) must not stack into the strip (mirrors PaginationPreview)
-    return raw?.filter((img) => !img.floating)
+    if (!raw) return undefined
+    // floating shapes (watermarks) must not stack into the strip (mirrors
+    // PaginationPreview). Kept images carry their parse-order index so the
+    // strip's replace/delete buttons target the right imageEdits entry.
+    const shown = kind === 'header' ? shownHeader : shownFooter
+    const edits = new Map((shown?.imageEdits ?? []).map((e) => [e.index, e]))
+    const kept: HfStripImage[] = []
+    raw.forEach((img, index) => {
+      if (img.floating) return
+      const edit = edits.get(index)
+      if (edit?.op === 'remove') return
+      if (edit?.op === 'replace' && edit.image) {
+        kept.push({
+          dataUrl: `data:${edit.image.mime};base64,${edit.image.base64}`,
+          widthPx: edit.image.widthPx,
+          heightPx: edit.image.heightPx,
+          parsedIndex: index,
+        })
+        return
+      }
+      kept.push({ ...img, parsedIndex: index })
+    })
+    return kept
   }
 
-  const commitHf = (kind: 'header' | 'footer', next: HeaderFooter, viewOverride?: HfView) => {    const view = viewOverride ?? (kind === 'header' ? headerAreaView : footerAreaView)
+  const commitHf = (kind: 'header' | 'footer', next: HeaderFooter, viewOverride?: HfView) => {
+    const view = viewOverride ?? (kind === 'header' ? headerAreaView : footerAreaView)
     // multi-section and not the final one: use the per-section edit channel (that section becomes its own part; earlier sections are unaffected)
     if (view === 'default' && multiHf && hfSectionClamped < sections.length - 1) {
       const sec = sections[hfSectionClamped]
@@ -603,6 +630,21 @@ export function App() {
     const next: HeaderFooter = {
       ...(current ?? { text: '' }),
       images: [...(current?.images ?? []), image],
+    }
+    commitHf(kind, next, view)
+  }
+
+  /** Remove/replace an image already in the part (parsed-image order; later edits of the same index win) */
+  const commitHfImageEdit = (
+    kind: 'header' | 'footer',
+    edit: { index: number; op: 'remove' | 'replace'; image?: NewImage },
+  ) => {
+    const view = kind === 'header' ? headerAreaView : footerAreaView
+    const current = kind === 'header' ? shownHeader : shownFooter
+    const base = current ?? { text: '' }
+    const next: HeaderFooter = {
+      ...base,
+      imageEdits: [...(base.imageEdits ?? []).filter((e) => e.index !== edit.index), edit],
     }
     commitHf(kind, next, view)
   }
@@ -2255,26 +2297,55 @@ export function App() {
           const pageHfOf = (
             pageIdx: number,
             kind: 'header' | 'footer',
-          ): { value: HeaderFooter | null; images?: HfImage[]; floats: HfImage[] } => {
+          ): {
+            value: HeaderFooter | null
+            images?: HfImage[]
+            floats: HfImage[]
+            /** variant this page's part resolves to (baked into the gap copy for the double-click edit entry) */
+            variant: HfView
+          } => {
             const pageNo = nums[pageIdx]
-            const split = (imgs?: HfImage[] | null) => ({
-              images: imgs?.filter((img) => !img.floating),
-              floats: imgs?.filter((img) => img.floating) ?? [],
-            })
+            // apply the shown value's imageEdits so the per-page copies reflect
+            // removals/replacements the same way the editing strips do
+            const split = (imgs?: HfImage[] | null, value?: HeaderFooter | null) => {
+              const inline = imgs?.filter((img) => !img.floating) ?? []
+              const floats = imgs?.filter((img) => img.floating) ?? []
+              const edits = new Map((value?.imageEdits ?? []).map((e) => [e.index, e]))
+              const images =
+                edits.size > 0
+                  ? inline.filter((img, index) => edits.get(index)?.op !== 'remove')
+                  : inline
+              return { images, floats }
+            }
             if (!secList || secList.length <= 1) {
               if (titlePg && pageIdx === 0) {
-                return kind === 'header'
-                  ? { value: hfVariants.headerFirst, ...split(parsed.headerFirst?.images) }
-                  : { value: hfVariants.footerFirst, ...split(parsed.footerFirst?.images) }
+                const value = kind === 'header' ? hfVariants.headerFirst : hfVariants.footerFirst
+                return {
+                  variant: 'first',
+                  value,
+                  ...split(
+                    kind === 'header' ? parsed.headerFirst?.images : parsed.footerFirst?.images,
+                    value,
+                  ),
+                }
               }
               if (evenOddHf && pageNo % 2 === 0) {
-                return kind === 'header'
-                  ? { value: hfVariants.headerEven, ...split(parsed.headerEven?.images) }
-                  : { value: hfVariants.footerEven, ...split(parsed.footerEven?.images) }
+                const value = kind === 'header' ? hfVariants.headerEven : hfVariants.footerEven
+                return {
+                  variant: 'even',
+                  value,
+                  ...split(
+                    kind === 'header' ? parsed.headerEven?.images : parsed.footerEven?.images,
+                    value,
+                  ),
+                }
               }
-              return kind === 'header'
-                ? { value: header, ...split(parsed.headerImages) }
-                : { value: footer, ...split(parsed.footerImages) }
+              const value = kind === 'header' ? header : footer
+              return {
+                variant: 'default',
+                value,
+                ...split(kind === 'header' ? parsed.headerImages : parsed.footerImages, value),
+              }
             }
             const pageSlice = slices[pageIdx]
             const sec = secList[Math.min(pageSlice.section, secList.length - 1)]
@@ -2287,9 +2358,11 @@ export function App() {
                   : 'default'
             const ov = variant === 'default' ? sectionHfOverride(pageSlice.section, kind) : null
             const rId = refs[kind][variant]
+            const value = ov ?? hfFromPart(rId ? parsed.hfParts?.[rId] : null)
             return {
-              value: ov ?? hfFromPart(rId ? parsed.hfParts?.[rId] : null),
-              ...split(rId ? parsed.hfParts?.[rId]?.images : undefined),
+              variant,
+              value,
+              ...split(rId ? parsed.hfParts?.[rId]?.images : undefined, value),
             }
           }
           /** page geometry a page's floating header images position against */
@@ -2412,6 +2485,8 @@ export function App() {
               el.style.top = 'auto'
               el.style.bottom = `${GAP_BAND + metrics.marginTop + box.footerDist}px`
               sizeGapHf(el, box)
+              el.dataset.hfVariant = gapFooter.variant
+              el.dataset.hfSection = String(slices[k].section)
               hfEls.push(el)
             }
             if (hfHasVisibleContent(gapHeader.value, gapHeader.images)) {
@@ -2426,6 +2501,8 @@ export function App() {
               el.style.bottom = 'auto'
               el.style.top = `calc(100% - ${Math.max(0, metrics.marginTop - box.headerDist)}px)`
               sizeGapHf(el, box)
+              el.dataset.hfVariant = gapHeader.variant
+              el.dataset.hfSection = String(slices[k + 1].section)
               hfEls.push(el)
             }
             // next page's floating header images (picture watermarks): behind-text,
@@ -2439,8 +2516,10 @@ export function App() {
                 ? {
                     hfEls,
                     // key must cover everything baked into the widgets (both pages'
-                    // formatted numbers + total count), or stale PAGE/NUMPAGES survive reuse
-                    hfKey: `${pageNoTextOf(k)}·${pageNoTextOf(k + 1)}·${visiblePages}·${hfSig(gapFooter.value)}·${hfSig(gapHeader.value)}·f${floatSig(gapHeader.floats)}`,
+                    // formatted numbers + total count + the baked variant/section —
+                    // equal-content variants would otherwise reuse stale dataset),
+                    // or stale PAGE/NUMPAGES survive reuse
+                    hfKey: `${pageNoTextOf(k)}·${pageNoTextOf(k + 1)}·${visiblePages}·v${gapFooter.variant}${gapHeader.variant}·${hfSig(gapFooter.value)}·${hfSig(gapHeader.value)}·f${floatSig(gapHeader.floats)}`,
                   }
                 : {}
             // previous page's footnotes: rendered into the top of the gap (page-bottom area), with the gap enlarged by the reserved height.
@@ -3498,6 +3577,36 @@ export function App() {
     runAiProofread,
   ])
 
+  /**
+   * Word-style edit entry: double-clicking a page's header/footer copy (the
+   * display-only strips inside canvas page gaps are pointer-events:none, so
+   * their own dblclick never fires — the bubbled event lands on the gap) opens
+   * the canvas editor on that page's variant. Word opens the footer you click;
+   * here the editor lives on the document's top/bottom strips, so the bump
+   * scrolls it in (focus) after the variant switch.
+   */
+  const onGapHfCopyDblClick = (e: ReactMouseEvent) => {
+    if (isProtected || readMode) return
+    const x = e.clientX
+    const y = e.clientY
+    const strip = Array.from(document.querySelectorAll<HTMLElement>('.page-gap-hf')).find((el) => {
+      const r = el.getBoundingClientRect()
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
+    })
+    if (!strip) return
+    const kind: 'header' | 'footer' = strip.classList.contains('page-hf-footer')
+      ? 'footer'
+      : 'header'
+    // the canvas strips edit the first section only; later sections' parts would commit to the wrong target
+    if (multiHf && Number(strip.dataset.hfSection ?? '0') !== hfSectionClamped) {
+      setStatus(t('appHfEditOtherSection'))
+      return
+    }
+    const raw = strip.dataset.hfVariant
+    setHfView(raw === 'first' || raw === 'even' ? raw : 'default')
+    setHfEditNonce((n) => ({ ...n, [kind]: n[kind] + 1 }))
+  }
+
   // Word: TOC entries jump on ⌘/Ctrl+click only; a plain click just places the
   // caret. Resolve the bookmark anchor against the original block XML, fall
   // back to matching the heading text.
@@ -4140,6 +4249,7 @@ export function App() {
                   <div
                     className={docZoomClass}
                     onClick={onDocClick}
+                    onDoubleClick={onGapHfCopyDblClick}
                     onContextMenu={onDocContextMenu}
                     style={docZoomStyle}
                   >
@@ -4226,10 +4336,19 @@ export function App() {
                           value={shownHeader ?? { text: '' }}
                           images={[...(hfImagesOf('header') ?? []), ...hfNewImagesOf('header')]}
                           readOnly={isProtected || readMode}
-                          onCommit={(next) => commitHf('header', { ...next, images: shownHeader?.images })}
+                          onCommit={(next) =>
+                            commitHf('header', { ...next, images: shownHeader?.images })
+                          }
                           onInsertImage={(img) => commitHfImage('header', img)}
+                          onRemoveImage={(index) =>
+                            commitHfImageEdit('header', { index, op: 'remove' })
+                          }
+                          onReplaceImage={(index, img) =>
+                            commitHfImageEdit('header', { index, op: 'replace', image: img })
+                          }
                           pageTotal={pageInfo.total}
                           style={edgeHeaderStyle}
+                          editNonce={hfEditNonce.header}
                         />
                       )}
                       <EditorContent editor={editor} />
@@ -4260,11 +4379,20 @@ export function App() {
                           value={shownFooter ?? { text: '' }}
                           images={[...(hfImagesOf('footer') ?? []), ...hfNewImagesOf('footer')]}
                           readOnly={isProtected || readMode}
-                          onCommit={(next) => commitHf('footer', { ...next, images: shownFooter?.images })}
+                          onCommit={(next) =>
+                            commitHf('footer', { ...next, images: shownFooter?.images })
+                          }
                           onInsertImage={(img) => commitHfImage('footer', img)}
+                          onRemoveImage={(index) =>
+                            commitHfImageEdit('footer', { index, op: 'remove' })
+                          }
+                          onReplaceImage={(index, img) =>
+                            commitHfImageEdit('footer', { index, op: 'replace', image: img })
+                          }
                           pageNo={lastPageNo?.text ?? pageInfo.total}
                           pageTotal={pageInfo.total}
                           style={edgeFooterStyle}
+                          editNonce={hfEditNonce.footer}
                         />
                       )}
                       {(inkAnnotations.length > 0 || inkTool !== 'select') && !readMode && (

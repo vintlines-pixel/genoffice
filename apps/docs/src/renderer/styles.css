@@ -2408,9 +2408,70 @@ th.cell-rev-del {
   object-fit: contain;
 }
 
+/* replace/delete tools for an image already in the part: a small chrome pill at
+   the image's top-right corner, revealed on image hover (pointer-events must be
+   restored — .page-hf-images is display-only none) */
+.page-hf-imgwrap {
+  position: relative;
+  display: inline-flex;
+  /* restore hit-testing: .page-hf-images is pointer-events:none, and an
+     inheriting wrap never matches :hover, so the tools could never open */
+  pointer-events: auto;
+}
+
+.page-hf-imgtools {
+  position: absolute;
+  /* bottom corner: the header's top band is claimed by the variant-chips bar
+     on hover (its pointer-events padding would swallow clicks up there) */
+  bottom: -9px;
+  right: -9px;
+  z-index: 4;
+  display: inline-flex;
+  gap: 1px;
+  padding: 1px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--docs-shadow-menu);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-hf-imgwrap:hover .page-hf-imgtools,
+.page-hf.page-hf-editing .page-hf-imgtools {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.page-hf-imgtools button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.page-hf-imgtools button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
 /* "Insert picture" affordance: revealed on header/footer hover (or while editing),
-   same chrome treatment as the variant chips above the page */
+   same chrome treatment as the variant chips above the page. Absolutely placed —
+   in-flow it would pad the strip's box by its own line height, and the invisible
+   lower half of the strip would swallow clicks meant for the body's first paragraph. */
 .page-hf-insert-image {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 2px;
+  z-index: 3;
   font-size: 10px;
   padding: 1px 8px;
   border: 1px solid var(--border);

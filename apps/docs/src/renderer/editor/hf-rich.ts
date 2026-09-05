@@ -59,15 +59,19 @@ const alignCss = (align: HfParagraph['align']): string | undefined =>
 /**
  * Editable HTML of the part: one <div> per text paragraph (cells rows omitted),
  * each run a styled <span>. Field sentinels become visible {PAGE}/{NUMPAGES}.
+ * Empty paragraphs carry a <br>: the initial caret collapseToEnd would land
+ * outside a truly empty div, and typed text would become stray surface-level
+ * text nodes the commit walker never reads.
  */
 export function hfToEditHtml(value: HeaderFooter): string {
   const blocks = hfParasOf(value)
     .filter((p) => !p.cells)
     .map((p) => {
       const align = alignCss(p.align)
+      const inner = p.runs.length > 0 ? runsToHtml(p.runs) : '<br>'
       return `<div class="page-hf-edit-para"${
         align ? ` style="text-align:${align}"` : ''
-      }>${runsToHtml(p.runs)}</div>`
+      }>${inner}</div>`
     })
     .join('')
   return blocks
@@ -110,7 +114,8 @@ export function cssColorToHex(color: string): string | undefined {
   if (!c) return undefined
   if (c[0] === '#') {
     const hex = c.slice(1)
-    if (hex.length === 3) return (hex[0]! + hex[0]! + hex[1]! + hex[1]! + hex[2]! + hex[2]!).toUpperCase()
+    if (hex.length === 3)
+      return (hex[0]! + hex[0]! + hex[1]! + hex[1]! + hex[2]! + hex[2]!).toUpperCase()
     if (hex.length === 6) return hex.toUpperCase()
     return undefined
   }
@@ -130,7 +135,13 @@ function mergeWalkStyle(el: HTMLElement, prev: WalkStyle): WalkStyle {
   const s: WalkStyle = { ...prev }
   const st = el.style
   const weight = st.fontWeight
-  if (isBoldTag(el.tagName) || weight === '600' || weight === '700' || weight === 'bold' || weight === 'bolder') {
+  if (
+    isBoldTag(el.tagName) ||
+    weight === '600' ||
+    weight === '700' ||
+    weight === 'bold' ||
+    weight === 'bolder'
+  ) {
     s.bold = true
   } else if (weight === 'normal' || weight === '400') {
     s.bold = false
@@ -149,7 +160,10 @@ function mergeWalkStyle(el: HTMLElement, prev: WalkStyle): WalkStyle {
     if (Number.isFinite(pt) && pt > 0) s.sizeHalfPoints = Math.round(pt * 2)
   }
   if (st.fontFamily) {
-    const family = st.fontFamily.split(',')[0]!.replace(/^['"]|['"]$/g, '').trim()
+    const family = st.fontFamily
+      .split(',')[0]!
+      .replace(/^['"]|['"]$/g, '')
+      .trim()
     if (family) s.font = family
   }
   return s
@@ -250,10 +264,11 @@ function editBlocks(root: HTMLElement): Element[] {
       textOnly = child.textContent ?? ''
     }
   }
-  if (out.length === 0 && textOnly !== null) {
+  if (textOnly !== null) {
+    // stray surface-level text: keep it as a leading block instead of dropping it
     const div = document.createElement('div')
     div.textContent = textOnly
-    out.push(div)
+    out.unshift(div)
   }
   return out
 }
@@ -268,7 +283,8 @@ export function hfEditDomToValue(value: HeaderFooter | null, root: HTMLElement):
   const base = value ?? { text: '' }
   const paras = hfParasOf(base)
   const textParas = paras.filter((p) => !p.cells)
-  const templates: HfParagraph[] = textParas.length > 0 ? textParas : [{ align: 'center', runs: [] }]
+  const templates: HfParagraph[] =
+    textParas.length > 0 ? textParas : [{ align: 'center', runs: [] }]
   const blocks = editBlocks(root)
 
   // one edited paragraph per block; <br> inside a block becomes a line split

@@ -360,6 +360,17 @@ export function IconTable(props: IconProps) {
   )
 }
 
+/** picture with a swap arrow: replace an existing header/footer image */
+export function IconReplaceImage(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.02" y="3.85" width="9.96" height="8.3" rx="0.66" />
+      <path d="M 4.6 10.6 6.76 8 l 2.49 2.49 1.66 -1.66 1.66 1.66" />
+      <path d="M 11.2 2.2 h 2.6 v 2.6 M 13.7 2.3 a 5.4 5.4 0 0 0 -3.4 1.6" />
+    </Svg>
+  )
+}
+
 export function IconPicture(props: IconProps) {
   return (
     <Svg {...props}>

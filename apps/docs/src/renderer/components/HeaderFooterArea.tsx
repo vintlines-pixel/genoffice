@@ -26,6 +26,7 @@ import {
   IconClose,
   IconFontColorA,
   IconPageNumber,
+  IconReplaceImage,
 } from './icons'
 
 export interface HfValue {
@@ -34,10 +35,26 @@ export interface HfValue {
   paras?: HfParagraph[]
 }
 
+/** strip image: a parsed part image (parsedIndex = its parse-order slot, the
+ *  imageEdits target) or one newly added this session */
+export type HfStripImage = HfImage & { parsedIndex?: number }
+
 /** Word standard-colors palette for the header/footer text-color popover */
 const HF_COLORS = [
-  '000000', 'FFFFFF', 'C00000', 'FF0000', 'ED7D31', 'FFC000', 'FFFF00', '00B050',
-  '0070C0', '00B0F0', '002060', '7030A0', '808080', 'C0C0C0',
+  '000000',
+  'FFFFFF',
+  'C00000',
+  'FF0000',
+  'ED7D31',
+  'FFC000',
+  'FFFF00',
+  '00B050',
+  '0070C0',
+  '00B0F0',
+  '002060',
+  '7030A0',
+  '808080',
+  'C0C0C0',
 ]
 
 function runStyle(run: Run): React.CSSProperties {
@@ -60,6 +77,27 @@ function runStyle(run: Run): React.CSSProperties {
     style.fontVariantCaps = 'normal'
   }
   return style
+}
+
+/** pick a png/jpeg/gif from disk and read its natural size (shared by insert and replace) */
+async function pickImageFromDisk(): Promise<NewImage | null> {
+  const picked = await window.desktop.pickImage()
+  if (!picked) return null
+  const mime = picked.mime
+  if (!/^image\/(png|jpeg|gif)$/.test(mime)) return null
+  const dataUrl = `data:${mime};base64,${picked.base64}`
+  const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+    img.onerror = () => reject(new Error('Failed to read image'))
+    img.src = dataUrl
+  })
+  return {
+    base64: picked.base64,
+    mime: picked.mime as NewImage['mime'],
+    widthPx: size.width,
+    heightPx: size.height,
+  }
 }
 
 /** document content colors (w:shd / w:pBdr), theme-independent; mirrors makeGapHfEl */
@@ -99,24 +137,33 @@ export function HeaderFooterArea({
   readOnly,
   onCommit,
   onInsertImage,
+  onRemoveImage,
+  onReplaceImage,
   pageNo,
   pageTotal,
   style,
+  editNonce,
 }: {
   kind: 'header' | 'footer'
   value: HfValue
   /** logo and other images in the part, display-only (text edits do not affect their saved bytes) */
-  images?: HfImage[]
+  images?: HfStripImage[]
   readOnly?: boolean
   onCommit: (next: HfValue) => void
   /** insert a picture from disk into this header/footer (renders the affordance when set) */
   onInsertImage?: (image: NewImage) => void
+  /** remove an image that is already in the part (parsed-image order) */
+  onRemoveImage?: (index: number) => void
+  /** swap an image that is already in the part for one from disk (parsed-image order) */
+  onReplaceImage?: (index: number, image: NewImage) => void
   /** Page number shown for '#' (may be a section-formatted string); the continuous-flow canvas has no real page number, defaults to 1 */
   pageNo?: number | string
   /** Total page count shown for TOTAL_PAGES_MARK (NUMPAGES field), defaults to 1 */
   pageTotal?: number
   /** geometry override: on differing-width sections the strip is pinned to its own section's box */
   style?: React.CSSProperties
+  /** bump to open editing from outside (double-click on a gap's display-only copy); a change while already editing re-opens on the current value, discarding the uncommitted edit */
+  editNonce?: number
 }) {
   const { t, lang } = useI18n()
   const [editing, setEditing] = useState(false)
@@ -125,35 +172,48 @@ export function HeaderFooterArea({
   const editRef = useRef<HTMLDivElement>(null)
   const cancelRef = useRef(false)
   const initialHtmlRef = useRef('')
-  const paras = hfParasOf(value)
+  // An image-only part (logo header) has no text paragraphs: hfParasOf would
+  // still synthesize one empty line, which stacks a stray blank line over the
+  // body's first paragraph (it even intercepts its clicks).
+  const imageOnly = !value.text && !value.pageNumber && !value.paras?.length
+  const paras = imageOnly ? [] : hfParasOf(value)
 
   const insertImage = async () => {
     if (inserting) return
     setInserting(true)
     try {
-      const picked = await window.desktop.pickImage()
+      const picked = await pickImageFromDisk()
       if (!picked) return
-      const mime = picked.mime
-      if (!/^image\/(png|jpeg|gif)$/.test(mime)) return
-      const dataUrl = `data:${mime};base64,${picked.base64}`
-      const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-        const img = new Image()
-        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
-        img.onerror = () => reject(new Error('Failed to read image'))
-        img.src = dataUrl
-      })
-      onInsertImage?.({
-        base64: picked.base64,
-        mime: mime as NewImage['mime'],
-        widthPx: size.width,
-        heightPx: size.height,
-      })
+      onInsertImage?.(picked)
     } catch {
       /* dialog cancelled or image unreadable */
     } finally {
       setInserting(false)
     }
   }
+
+  /** swap an in-file image for one from disk (same pipeline as insert, keeps the paragraph) */
+  const replaceImage = async (index: number) => {
+    if (inserting) return
+    setInserting(true)
+    try {
+      const picked = await pickImageFromDisk()
+      if (!picked) return
+      onReplaceImage?.(index, picked)
+    } catch {
+      /* dialog cancelled or image unreadable */
+    } finally {
+      setInserting(false)
+    }
+  }
+
+  // External entry (double-click on a gap's display-only copy): open the editor
+  // on the variant App switched to. editNonce is also a re-inject dependency
+  // below, so a bump while editing re-opens on the fresh value (explicit intent
+  // to switch strips discards the uncommitted edit).
+  useEffect(() => {
+    if (editNonce) setEditing(true)
+  }, [editNonce])
 
   // The editing surface is a standalone element: content is injected here and React
   // does not manage its children; after commit the whole element unmounts, so text
@@ -179,7 +239,7 @@ export function HeaderFooterArea({
       sel.collapseToEnd()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing])
+  }, [editing, editNonce])
 
   const commit = () => {
     const el = editRef.current
@@ -279,16 +339,39 @@ export function HeaderFooterArea({
           {images
             .filter((img) => !img.floating)
             .map((img, i) => (
-              <img
-                key={i}
-                src={img.dataUrl}
-                alt=""
-                draggable={false}
-                style={{
-                  ...(img.widthPx ? { width: img.widthPx } : {}),
-                  ...(img.heightPx ? { height: img.heightPx } : {}),
-                }}
-              />
+              <span key={i} className="page-hf-imgwrap">
+                <img
+                  src={img.dataUrl}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    ...(img.widthPx ? { width: img.widthPx } : {}),
+                    ...(img.heightPx ? { height: img.heightPx } : {}),
+                  }}
+                />
+                {/* images already in the file: replace/delete without leaving the strip
+                    (their paragraphs were display-only before imageEdits existed) */}
+                {img.parsedIndex !== undefined && !readOnly && (
+                  <span className="page-hf-imgtools" onMouseDown={(e) => e.preventDefault()}>
+                    {onReplaceImage && (
+                      <button
+                        data-tip={t('appHfImageReplace')}
+                        onClick={() => void replaceImage(img.parsedIndex!)}
+                      >
+                        <IconReplaceImage size={13} />
+                      </button>
+                    )}
+                    {onRemoveImage && (
+                      <button
+                        data-tip={t('appHfImageRemove')}
+                        onClick={() => onRemoveImage(img.parsedIndex!)}
+                      >
+                        <IconClose size={13} />
+                      </button>
+                    )}
+                  </span>
+                )}
+              </span>
             ))}
         </div>
       )}

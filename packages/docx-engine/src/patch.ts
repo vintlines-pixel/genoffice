@@ -43,6 +43,7 @@ import { buildChartPartXml, buildChartWorkbookXlsxBase64, CHART_WORKBOOK_REL_TYP
 import type {
   CommentInfo,
   DocProtection,
+  HfImageEdit,
   WriteProtection,
   GeneratedBlock,
   HeaderFooter,
@@ -465,7 +466,10 @@ export async function saveDocx(
   /** Land image bytes as a media part; returns the relationship id + part path.
    *  Identical bytes reuse ONE media part (repeated logos / per-page backgrounds).
    *  The relationship itself is registered by the caller (body vs header/footer part). */
-  const embedImageMedia = (image: { base64: string; mime: NewImage['mime'] }): { rId: string; path: string } => {
+  const embedImageMedia = (image: {
+    base64: string
+    mime: NewImage['mime']
+  }): { rId: string; path: string } => {
     const ext = IMAGE_EXT[image.mime]
     const contentKey = `${image.mime}:${image.base64}`
     let hit = mediaRelByContent.get(contentKey)
@@ -536,13 +540,23 @@ export async function saveDocx(
   /** body inline image: relationship lands in word/_rels/document.xml.rels */
   const embedImage = (image: NewImage): string => {
     const { rId, path } = embedImageMedia(image)
-    newRels.push({ rId, type: IMAGE_REL_TYPE, target: path.replace(/^word\//, ''), external: false })
+    newRels.push({
+      rId,
+      type: IMAGE_REL_TYPE,
+      target: path.replace(/^word\//, ''),
+      external: false,
+    })
     return embedImageDrawing(image, rId)
   }
   /** run-inner inline image for the generate layer (new images have no xml). */
   function embedInlineImage(image: NewImage): string {
     const { rId, path } = embedImageMedia(image)
-    newRels.push({ rId, type: IMAGE_REL_TYPE, target: path.replace(/^word\//, ''), external: false })
+    newRels.push({
+      rId,
+      type: IMAGE_REL_TYPE,
+      target: path.replace(/^word\//, ''),
+      external: false,
+    })
     return inlineDrawingXml(image, rId)
   }
   /** header/footer inline image: relationship lands in that part's own rels */
@@ -1529,6 +1543,9 @@ function headerFooterPartXml(
   // model) keep their original bytes; only the set of text paragraphs is replaced as a
   // whole at the position of the first text paragraph. The watermark paragraph
   // (v:textpath) is the exception — it is regenerated from watermarkXml.
+  // imageEdits carve exceptions into the preserved image paragraphs: removal drops
+  // the image's run (whole paragraph when it held only that image), replacement
+  // swaps the drawing run and keeps the paragraph's own formatting.
   if (originalXml) {
     const open = new RegExp(`<${root}[^>]*>`).exec(originalXml)?.[0]
     const closeIdx = originalXml.lastIndexOf(`</${root}>`)
@@ -1539,22 +1556,76 @@ function headerFooterPartXml(
         /<w:drawing[\s>]|<w:pict[\s>]|<w:object[\s>]/.test(xml) && !xml.includes('<v:textpath')
       const isTextPara = (c: { name: string; xml: string }) =>
         c.name === 'w:p' && !isProtectedPara(c.xml)
+      // parsed-image order: all w:drawing parts first, then all w:pict parts —
+      // count each paragraph's images and resolve its edits in one pass
+      const editsByIndex = new Map<number, HfImageEdit>()
+      for (const edit of hf.imageEdits ?? []) editsByIndex.set(edit.index, edit)
+      let drawingOrdinal = 0
+      let pictOrdinal = 0
+      const applyEditedImages = (child: { name: string; xml: string }): string | null => {
+        const ordinals: number[] = []
+        for (const _m of child.xml.matchAll(/<w:drawing[\s>]/g)) ordinals.push(drawingOrdinal++)
+        for (const _m of child.xml.matchAll(/<w:pict[\s>]/g)) ordinals.push(pictOrdinal++)
+        let xml = child.xml
+        for (const ordinal of ordinals) {
+          const edit = editsByIndex.get(ordinal)
+          if (!edit) continue
+          if (edit.op === 'replace' && edit.image && embedImage) {
+            // swap the drawing run; the paragraph's pPr and any text runs survive
+            const replacement = embedImage(edit.image)
+            const runMatch = /<w:r><w:drawing[\s\S]*?<\/w:drawing><\/w:r>/.exec(replacement)
+            if (!runMatch) continue
+            xml = xml.replace(
+              /<w:r>(?:(?!<\/w:r>)[\s\S])*?<w:drawing[\s\S]*?<\/w:drawing>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/,
+              () => runMatch[0],
+            )
+          } else if (edit.op === 'remove') {
+            // drop the image run; a paragraph left with no text and no image goes away
+            const withoutRun = xml.replace(
+              /<w:r>(?:(?!<\/w:r>)[\s\S])*?<w:drawing[\s\S]*?<\/w:drawing>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/,
+              '',
+            )
+            xml =
+              withoutRun === xml
+                ? xml.replace(
+                    /<w:r>(?:(?!<\/w:r>)[\s\S])*?<w:pict[\s\S]*?<\/w:pict>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/,
+                    '',
+                  )
+                : withoutRun
+          }
+        }
+        if (xml === child.xml) return child.xml
+        if (!/<w:t[\s>]/.test(xml) && !/<w:drawing[\s>]/.test(xml) && !/<w:pict[\s>]/.test(xml)) {
+          return null // image-only paragraph: removing its image removes the paragraph
+        }
+        return xml
+      }
       if (children.some((c) => !isTextPara(c))) {
+        // A text-empty body (pure-image header where only imageEdits changed)
+        // must not inject an empty paragraph — it would push the logo down.
+        const bodyHasContent =
+          (hf.text?.trim() ?? '').length > 0 ||
+          Boolean(hf.pageNumber) ||
+          (hf.paras?.some((p) => p.runs.some((r) => r.text)) ?? false)
         const parts: string[] = []
         let injected = false
         for (const c of children) {
           if (isTextPara(c)) {
-            if (!injected) {
+            if (!injected && bodyHasContent) {
               parts.push(body)
               injected = true
             }
           } else if (c.name === 'w:p' && c.xml.includes('<v:textpath')) {
             // Drop the old watermark paragraph (body already carries the regenerated watermarkXml)
           } else {
-            parts.push(c.xml)
+            // image paragraphs only: advance the parse-order ordinals and apply edits.
+            // Non-paragraph children (tables) hold no parsed images (parse skips
+            // cell-run pictures), so they leave the counters untouched.
+            const edited = editsByIndex.size > 0 && c.name === 'w:p' ? applyEditedImages(c) : c.xml
+            if (edited !== null) parts.push(edited)
           }
         }
-        if (!injected) parts.unshift(body)
+        if (!injected && (bodyHasContent || imageXml.length > 0)) parts.unshift(body)
         const rootOpen = watermarkXml ? withWatermarkNs(open) : open
         return `${originalXml.slice(0, openIdx)}${rootOpen}${parts.join('')}</${root}>`
       }
