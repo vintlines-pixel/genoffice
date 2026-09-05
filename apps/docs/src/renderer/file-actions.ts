@@ -908,7 +908,9 @@ async function saveOnce(
     ctx.setStatus(
       auto ? t('appAutoSavedAt', { time: new Date().toLocaleTimeString() }) : t('appSaved'),
     )
-    if (!auto) showToast(t('appSaved'))
+    // no success toast: the pill fading in over the ribbon reads as a page flash
+    // on every Ctrl+S (Word saves silently; the status bar + tab dirty dot are
+    // the durable feedback). Errors keep their toast below.
     return true
   } catch (err) {
     ctx.setStatus(t('appSaveFailed', { error: String(err) }))
